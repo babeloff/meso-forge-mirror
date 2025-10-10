@@ -1,0 +1,8 @@
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "s3_region": "us-east-1",
+  "s3_endpoint": "https://minio.example.com",
+  "github_token": null
+}

@@ -38,3 +38,33 @@ impl Config {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.max_concurrent_downloads, 5);
+        assert_eq!(config.retry_attempts, 3);
+        assert_eq!(config.timeout_seconds, 300);
+    }
+
+    #[test]
+    fn test_config_save_load() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test_config.json");
+
+        let config = Config::default();
+        config.save_to_file(config_path.to_str().unwrap()).unwrap();
+
+        let loaded_config = Config::load_from_file(config_path.to_str().unwrap()).unwrap();
+        assert_eq!(
+            loaded_config.max_concurrent_downloads,
+            config.max_concurrent_downloads
+        );
+        assert_eq!(loaded_config.retry_attempts, config.retry_attempts);
+    }
+}

@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
             config,
         } => {
             info!("Starting package mirroring");
-            
+
             let config = if let Some(config_path) = config {
                 Config::load_from_file(&config_path)?
             } else {
@@ -74,9 +74,9 @@ async fn main() -> Result<()> {
             };
 
             let repo_type = RepositoryType::from_string(&target_type)?;
-            
+
             mirror_packages(&sources, repo_type, &target_path, &config).await?;
-            
+
             info!("Mirroring completed successfully");
         }
         Commands::InitConfig { output } => {
