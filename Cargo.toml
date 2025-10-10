@@ -2,6 +2,13 @@
 name = "meso-forge-mirror"
 version = "0.1.0"
 edition = "2021"
+authors = ["phreed <211644+phreed@users.noreply.github.com>"]
+description = "A tool for mirroring conda packages from staging PRs to target repositories"
+repository = "https://github.com/babeloff/meso-forge-mirror"
+license = "GPL-3.0"
+readme = "README.md"
+keywords = ["conda", "mirror", "package", "repository", "s3"]
+categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

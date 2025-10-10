@@ -12,6 +12,7 @@ use repository::RepositoryType;
 
 #[derive(Parser)]
 #[command(name = "meso-forge-mirror")]
+#[command(version)]
 #[command(about = "Mirror conda packages from staging PRs to target repositories", long_about = None)]
 struct Cli {
     #[command(subcommand)]
