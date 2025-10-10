@@ -25,9 +25,7 @@ pub async fn mirror_packages(
             let client = client.clone();
             let repository = repository.clone();
             let config = config.clone();
-            async move {
-                mirror_single_package(&client, source, &repository, &config).await
-            }
+            async move { mirror_single_package(&client, source, &repository, &config).await }
         })
         .buffer_unordered(config.max_concurrent_downloads)
         .collect::<Vec<_>>()
@@ -60,8 +58,8 @@ pub async fn mirror_packages(
 }
 
 fn build_client(config: &Config) -> Result<Client> {
-    let mut builder = Client::builder()
-        .timeout(std::time::Duration::from_secs(config.timeout_seconds));
+    let mut builder =
+        Client::builder().timeout(std::time::Duration::from_secs(config.timeout_seconds));
 
     if let Some(token) = &config.github_token {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -103,7 +101,10 @@ async fn download_package(client: &Client, url: &str, config: &Config) -> Result
 
     loop {
         attempts += 1;
-        info!("Downloading from {} (attempt {}/{})", url, attempts, max_attempts);
+        info!(
+            "Downloading from {} (attempt {}/{})",
+            url, attempts, max_attempts
+        );
 
         match client.get(url).send().await {
             Ok(response) => {
@@ -135,11 +136,11 @@ async fn download_package(client: &Client, url: &str, config: &Config) -> Result
 fn extract_package_name(url: &str) -> Result<String> {
     let parsed_url = Url::parse(url)?;
     let path = parsed_url.path();
-    
+
     // Get the last segment of the path
     let package_name = path
         .split('/')
-        .last()
+        .next_back()
         .ok_or_else(|| anyhow!("Could not extract package name from URL"))?;
 
     if package_name.is_empty() {
@@ -153,28 +154,32 @@ fn extract_package_name(url: &str) -> Result<String> {
 #[allow(dead_code)]
 pub async fn resolve_github_pr_artifacts(pr_url: &str, config: &Config) -> Result<Vec<String>> {
     info!("Resolving artifacts from PR: {}", pr_url);
-    
+
     // Parse PR URL to extract owner, repo, and PR number
     let parsed_url = Url::parse(pr_url)?;
-    let path_segments: Vec<&str> = parsed_url.path().trim_start_matches('/').split('/').collect();
-    
+    let path_segments: Vec<&str> = parsed_url
+        .path()
+        .trim_start_matches('/')
+        .split('/')
+        .collect();
+
     if path_segments.len() < 4 || path_segments[2] != "pull" {
         return Err(anyhow!("Invalid GitHub PR URL format"));
     }
-    
+
     let owner = path_segments[0];
     let repo = path_segments[1];
     let pr_number = path_segments[3].trim_end_matches('/');
-    
+
     // Use GitHub API to get artifacts
     let _client = build_client(config)?;
     let _api_url = format!(
         "https://api.github.com/repos/{}/{}/pulls/{}/checks",
         owner, repo, pr_number
     );
-    
+
     info!("Fetching PR artifacts from GitHub API");
-    
+
     // Note: This is a simplified version. In practice, you'd need to:
     // 1. Get the PR details
     // 2. Find associated CI runs
@@ -182,4 +187,29 @@ pub async fn resolve_github_pr_artifacts(pr_url: &str, config: &Config) -> Resul
     // For now, return empty list as placeholder
     warn!("GitHub artifact resolution is not fully implemented yet");
     Ok(vec![])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_package_name() {
+        let url = "https://example.com/packages/my-package-1.0.0.tar.bz2";
+        let name = extract_package_name(url).unwrap();
+        assert_eq!(name, "my-package-1.0.0.tar.bz2");
+    }
+
+    #[test]
+    fn test_extract_package_name_with_query() {
+        let url = "https://example.com/packages/my-package.tar.bz2?token=abc";
+        let name = extract_package_name(url).unwrap();
+        assert_eq!(name, "my-package.tar.bz2");
+    }
+
+    #[test]
+    fn test_extract_package_name_empty() {
+        let url = "https://example.com/";
+        assert!(extract_package_name(url).is_err());
+    }
 }

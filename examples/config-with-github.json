@@ -1,0 +1,8 @@
+{
+  "max_concurrent_downloads": 10,
+  "retry_attempts": 5,
+  "timeout_seconds": 600,
+  "s3_region": "us-east-1",
+  "s3_endpoint": null,
+  "github_token": "ghp_your_github_token_here"
+}
