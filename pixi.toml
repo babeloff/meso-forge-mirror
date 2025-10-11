@@ -1,0 +1,265 @@
+[project]
+name = "meso-forge-mirror"
+version = "0.1.0"
+description = "A tool for mirroring conda packages from staging PRs to target repositories"
+authors = ["phreed <211644+phreed@users.noreply.github.com>"]
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+# Build dependencies for Rust development
+rust = ">=1.70"
+cargo = ">=1.70"
+pkg-config = "*"
+openssl = "*"
+
+# Conda packaging dependencies
+conda-build = "*"
+boa-build = "*"
+rattler-build = "*"
+anaconda-client = "*"
+
+# Development and testing tools
+git = "*"
+pytest = "*"
+nushell = "*"
+
+# AWS CLI for S3 testing
+awscli = "*"
+
+[tasks]
+# === Core Cargo Tasks ===
+build = "cargo build"
+build-release = "cargo build --release"
+test = "cargo test"
+test-verbose = "cargo test --verbose"
+clippy = "cargo clippy -- -D warnings"
+fmt = "cargo fmt"
+fmt-check = "cargo fmt -- --check"
+clean = "cargo clean"
+
+# === Advanced Cargo Tasks ===
+check = "cargo check"
+bench = "cargo bench"
+doc = "cargo doc --open"
+update = "cargo update"
+audit = { cmd = "cargo audit", depends_on = ["install-audit"] }
+install-audit = "cargo install cargo-audit"
+
+# === Nushell-based Testing ===
+test-nu = "nu scripts/test.nu unit"
+test-all-nu = "nu scripts/test.nu all"
+test-integration-nu = "nu scripts/test.nu integration"
+test-lint-nu = "nu scripts/test.nu lint"
+test-local-mirror = "nu scripts/test.nu local-mirror"
+test-config-nu = "nu scripts/test.nu config"
+test-performance = "nu scripts/test.nu performance"
+
+# === Nushell-based Conda Operations ===
+conda-ops = "nu scripts/conda-ops.nu help"
+conda-build-nu = { cmd = "nu scripts/conda-ops.nu build", depends_on = ["build-release"] }
+conda-build-all-nu = { cmd = "nu scripts/conda-ops.nu build linux-64 osx-64 osx-arm64 win-64", depends_on = ["build-release"] }
+conda-test-nu = "nu scripts/conda-ops.nu test"
+conda-verify-nu = "nu scripts/conda-ops.nu verify"
+conda-publish-nu = "nu scripts/conda-ops.nu publish"
+conda-list-nu = "nu scripts/conda-ops.nu list-packages"
+conda-clean-nu = "nu scripts/conda-ops.nu clean"
+
+# === Development Workflow ===
+dev-setup = { depends_on = ["build", "test", "clippy", "fmt-check"] }
+ci-check = { depends_on = ["build", "test", "clippy", "fmt-check", "build-release"] }
+
+# === Binary Installation ===
+install = "cargo install --path . --force"
+install-debug = "cargo install --path . --debug --force"
+
+# === Example and Demo Tasks ===
+run-example = "cargo run -- init-config -o example-config.json"
+demo-local = """
+cargo run -- mirror \
+  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --target-type local \
+  --target-path ./demo-mirror
+"""
+
+# === Conda Package Building ===
+conda-build = { cmd = "conda-build conda-recipe/ --output-folder ./conda-packages", depends_on = ["build-release"] }
+conda-build-all = { cmd = "conda-build conda-recipe/ --output-folder ./conda-packages --variants '{\"target_platform\": [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]}'", depends_on = ["build-release"] }
+
+# Alternative with rattler-build (modern approach)
+rattler-build = { cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --output-dir ./rattler-packages", depends_on = ["build-release"] }
+rattler-build-all = { cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --target-platform linux-64,osx-64,osx-arm64,win-64 --output-dir ./rattler-packages", depends_on = ["build-release"] }
+
+# Cross-platform building with nushell script
+conda-build-cross = { cmd = "nu scripts/build.nu --target all", depends_on = ["build-release"] }
+conda-build-linux = { cmd = "nu scripts/build.nu --target linux-64", depends_on = ["build-release"] }
+conda-build-macos = { cmd = "nu scripts/build.nu --target osx-64", depends_on = ["build-release"] }
+conda-build-macos-arm = { cmd = "nu scripts/build.nu --target osx-arm64", depends_on = ["build-release"] }
+conda-build-windows = { cmd = "nu scripts/build.nu --target win-64", depends_on = ["build-release"] }
+
+# === Package Management ===
+conda-install-local = """
+conda install --use-local meso-forge-mirror
+"""
+
+conda-create-env = """
+conda create -n meso-forge-test meso-forge-mirror --use-local -y
+"""
+
+conda-test-local = { cmd = """
+conda create -n test-local meso-forge-mirror --use-local -y && \
+conda activate test-local && \
+meso-forge-mirror --version && \
+meso-forge-mirror --help && \
+meso-forge-mirror init-config -o test-config.json
+""", depends_on = ["conda-build"] }
+
+# Verify conda package integrity
+conda-verify = { cmd = "conda verify $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
+
+# === Publishing Tasks ===
+publish-conda-forge = { cmd = "anaconda upload $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
+publish-prefix-dev = { cmd = "rattler-build upload prefix.dev $(find ./rattler-packages -name '*.conda' | head -1)", depends_on = ["rattler-build"] }
+
+# Upload to custom conda channel
+upload-channel = { cmd = "anaconda upload -u ${CONDA_CHANNEL:-meso-forge} $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
+
+# Upload all built packages to test channel
+upload-test-channel = """
+for package in $(find ./conda-packages -name "*.conda" -o -name "*.tar.bz2"); do
+  anaconda upload -u ${CONDA_CHANNEL:-meso-forge} --label test --force "$package"
+done
+"""
+
+# Batch upload all packages
+upload-all-packages = { depends_on = ["conda-build-all", "upload-all-conda", "upload-all-rattler"] }
+upload-all-conda = """
+for package in $(find ./conda-packages -name "*.conda" -o -name "*.tar.bz2"); do
+  anaconda upload -u ${CONDA_CHANNEL:-meso-forge} --force "$package"
+done
+"""
+upload-all-rattler = """
+for package in $(find ./rattler-packages -name "*.conda"); do
+  rattler-build upload prefix.dev --channel meso-forge "$package"
+done
+"""
+
+# === Testing with Different Targets ===
+test-s3-local = """
+AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
+cargo run -- mirror \
+  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
+  --target-type s3 \
+  --target-path "s3://test-bucket/conda-packages" \
+  --config examples/config-minio.json
+"""
+
+test-prefix-dev = """
+cargo run -- mirror \
+  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
+  --target-type prefix-dev \
+  --target-path "https://prefix.dev/channels/test-channel"
+"""
+
+# === Maintenance Tasks ===
+deps-outdated = "cargo outdated"
+deps-update = "cargo update"
+security-audit = { cmd = "cargo audit", depends_on = ["install-audit"] }
+
+# === Cross-compilation Tasks ===
+build-linux = "cargo build --release --target x86_64-unknown-linux-gnu"
+build-macos = "cargo build --release --target x86_64-apple-darwin"
+build-macos-arm = "cargo build --release --target aarch64-apple-darwin"
+build-windows = "cargo build --release --target x86_64-pc-windows-gnu"
+
+# === Profiling and Performance ===
+profile = """
+cargo build --release && \
+perf record --call-graph=dwarf target/release/meso-forge-mirror mirror \
+  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --target-type local \
+  --target-path ./profile-test
+"""
+
+# === Documentation Tasks ===
+docs-serve = "python -m http.server 8000 -d target/doc"
+docs-build = "cargo doc --no-deps"
+docs-all = "cargo doc --document-private-items"
+
+# === Environment Setup ===
+setup-dev = { depends_on = ["install-dev-tools", "build"] }
+install-dev-tools = """
+cargo install cargo-audit cargo-outdated cargo-watch
+"""
+
+# === File Watching for Development ===
+watch = "cargo watch -x check -x test -x run"
+watch-test = "cargo watch -x test"
+
+# === Release Preparation ===
+pre-release = { depends_on = ["ci-check", "security-audit", "build-release"] }
+prepare-release = { depends_on = ["pre-release", "conda-build-all"] }
+
+# === Integration Testing ===
+integration-test = { depends_on = ["build-release", "test-local-mirror", "test-config-generation"] }
+test-local-mirror = """
+mkdir -p integration-test && \
+cargo run -- mirror \
+  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
+  --target-type local \
+  --target-path ./integration-test/mirror && \
+test -f ./integration-test/mirror/noarch/pip-24.0-pyhd8ed1ab_0.conda
+"""
+
+test-config-generation = """
+cargo run -- init-config -o integration-test/test-config.json && \
+test -f integration-test/test-config.json
+"""
+
+# === Cleanup Tasks ===
+clean-all = { depends_on = ["clean", "clean-examples", "clean-integration", "clean-packages"] }
+clean-examples = "rm -rf demo-mirror example-config.json"
+clean-integration = "rm -rf integration-test"
+clean-packages = "rm -rf conda-packages rattler-packages"
+clean-build-artifacts = "rm -rf target/*/release/meso-forge-mirror*"
+
+[feature]
+# Features for different build configurations
+default = []
+aws = ["build", "test"]
+github = ["build", "test"]
+all-features = ["build", "test"]
+
+# === Development environment features ===
+[environments]
+dev = { features = ["default"], solve-group = "dev" }
+test = { features = ["default"], solve-group = "test" }
+release = { features = ["default"], solve-group = "release" }
+packaging = { features = ["default"], solve-group = "packaging", dependencies = ["conda-build", "rattler-build", "anaconda-client"] }
+
+[activation]
+scripts = ["scripts/setup-env.nu"]
+
+[target.linux-64.tasks]
+# Linux-specific tasks
+test-system-deps = "pkg-config --exists openssl"
+
+[target.osx-64.tasks]
+# macOS-specific tasks
+test-system-deps = "brew list openssl || echo 'OpenSSL not found via brew'"
+
+[target.win-64.tasks]
+# Windows-specific tasks
+test-system-deps = "echo 'Windows system dependencies check'"
+
+[pypi-dependencies]
+# Python dependencies if needed for tooling
+pre-commit = "*"
+
+# === Nushell Task Groups ===
+[task-groups]
+# Group related tasks for easier execution
+build-all = ["build", "build-release", "conda-build-all-nu"]
+test-comprehensive = ["test-all-nu", "test-lint-nu", "test-performance"]
+conda-workflow = ["conda-build-all-nu", "conda-test-nu", "conda-verify-nu"]
+release-workflow = ["prepare-release-nu", "conda-publish-nu"]

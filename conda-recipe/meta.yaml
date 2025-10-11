@@ -1,0 +1,63 @@
+{% set name = "meso-forge-mirror" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  number: 0
+  script: |
+    # Build the release binary
+    cargo build --release --locked
+    # Install the binary
+    mkdir -p $PREFIX/bin
+    cp target/release/meso-forge-mirror $PREFIX/bin/
+  skip: true  # [win]
+
+requirements:
+  build:
+    - {{ compiler('rust') }}
+    - cargo-bundle-licenses
+    - pkg-config
+    - openssl  # [unix]
+  host:
+    - openssl  # [unix]
+  run:
+    - openssl  # [unix]
+
+test:
+  commands:
+    - meso-forge-mirror --help
+    - meso-forge-mirror --version
+
+about:
+  home: https://github.com/babeloff/meso-forge-mirror
+  license: GPL-3.0-only
+  license_family: GPL3
+  license_file: LICENSE
+  summary: A tool for mirroring conda packages from staging PRs to target repositories
+  description: |
+    A Rust application for mirroring conda packages from various sources to target
+    repositories with full conda ecosystem integration. This tool is particularly
+    useful when you want to use packages that are waiting to be included in
+    conda-forge but are taking a long time to go through the process.
+
+    Features:
+    - Mirror conda packages from URLs to different target repository types
+    - Support for Local, S3/MinIO, and prefix.dev repositories
+    - Full conda package validation with rattler integration
+    - Platform-aware organization and proper repository structure
+    - Concurrent downloads with configurable parallelism
+    - GitHub integration for fetching artifacts
+    - Enhanced error handling and diagnostics
+
+  doc_url: https://github.com/babeloff/meso-forge-mirror/tree/main/docs
+  dev_url: https://github.com/babeloff/meso-forge-mirror
+
+extra:
+  recipe-maintainers:
+    - phreed

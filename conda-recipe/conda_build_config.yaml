@@ -1,0 +1,85 @@
+# Conda build configuration for meso-forge-mirror
+# This file specifies build variants and compiler configurations
+
+# Rust compiler configuration
+rust_compiler_version:
+  - 1.70
+
+# Target platforms for cross-compilation
+target_platform:
+  - linux-64
+  - osx-64
+  - osx-arm64
+  - win-64
+
+# C compiler configuration for different platforms
+c_compiler_version:
+  - 11     # [linux]
+  - 14     # [osx]
+  - 19     # [win]
+
+# Compiler specifications
+c_compiler:
+  - gcc    # [linux]
+  - clang  # [osx]
+  - vs2019 # [win]
+
+# OpenSSL configuration
+openssl:
+  - 3.0
+
+# Pin versions for reproducible builds
+pin_run_as_build:
+  openssl:
+    max_pin: x.x
+
+# Build number increment for patch releases
+build_number_decrement:
+  - 0
+
+# Channel sources for dependencies
+channel_sources:
+  - conda-forge,defaults
+
+# Zip keys to ensure compatible combinations
+zip_keys:
+  - [c_compiler_version, c_compiler]
+  - [target_platform]
+
+# Skip builds for incompatible combinations
+# Currently no skips needed, but can be added later
+skip:
+  - False
+
+# Docker configuration for Linux builds (if using conda-build with containers)
+docker_image:
+  - quay.io/condaforge/linux-anvil-cos7-x86_64  # [linux64]
+
+# Cross-compilation support
+CONDA_BUILD_CROSS_COMPILATION:
+  - 1
+
+# Rust-specific environment variables
+CARGO_BUILD_TARGET:
+  - x86_64-unknown-linux-gnu   # [linux64]
+  - x86_64-apple-darwin        # [osx64]
+  - aarch64-apple-darwin       # [arm64]
+  - x86_64-pc-windows-gnu      # [win64]
+
+# Additional build flags
+RUSTFLAGS:
+  - "-C target-feature=+crt-static"  # [win]
+
+# Environment variables for cross-compilation
+PKG_CONFIG_ALLOW_CROSS:
+  - 1
+
+# Optimization flags
+CARGO_PROFILE_RELEASE_LTO:
+  - "true"
+
+CARGO_PROFILE_RELEASE_CODEGEN_UNITS:
+  - 1
+
+CARGO_PROFILE_RELEASE_PANIC:
+  - "abort"

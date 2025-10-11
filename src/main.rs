@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use tracing::info;
 
+mod conda_package;
 mod config;
 mod mirror;
 mod repository;

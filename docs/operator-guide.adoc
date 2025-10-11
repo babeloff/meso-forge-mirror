@@ -1,0 +1,727 @@
+= Meso Forge Mirror Operator Guide
+:toc: left
+:toclevels: 3
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+
+== Introduction
+
+The Meso Forge Mirror is a Rust-based command-line tool designed to mirror conda packages from various sources to target repositories with full conda ecosystem integration. This tool is particularly valuable for operators who need to work with packages that are pending approval in conda-forge staged recipes or need to maintain local mirrors of conda packages.
+
+The tool has been enhanced with rattler ecosystem integration to provide proper conda package handling, validation, and repository structure management.
+
+=== Key Features
+
+* **Enhanced Conda Package Processing**: Full integration with rattler ecosystem for proper package validation and metadata extraction
+* **Platform-Aware Organization**: Automatic organization of packages by platform (linux-64, osx-64, noarch, etc.)
+* **Repository Structure Management**: Generates proper conda repository structure with repodata.json files
+* **Package Validation**: Validates conda package integrity with checksum verification
+* Support for local repositories (including Rattler cache directories)
+* S3/MinIO repository support for cloud storage
+* prefix.dev channel integration
+* Concurrent downloads with configurable parallelism
+* Automatic retry with exponential backoff
+* GitHub integration for fetching CI artifacts
+
+== Installation
+
+=== Prerequisites
+
+* Rust toolchain (1.70+)
+* Git
+* Network access to source package repositories
+* Compatible rattler ecosystem crates (automatically handled by Cargo)
+
+=== Building from Source
+
+[source,bash]
+----
+git clone https://github.com/babeloff/meso-forge-mirror.git
+cd meso-forge-mirror
+cargo build --release
+----
+
+The compiled binary will be available at `target/release/meso-forge-mirror`.
+
+=== Installing to System PATH
+
+[source,bash]
+----
+# Copy to a directory in your PATH
+sudo cp target/release/meso-forge-mirror /usr/local/bin/
+
+# Or create a symlink
+sudo ln -s $(pwd)/target/release/meso-forge-mirror /usr/local/bin/meso-forge-mirror
+----
+
+== Configuration
+
+=== Initial Configuration
+
+Create a default configuration file:
+
+[source,bash]
+----
+meso-forge-mirror init-config -o meso-forge-mirror.json
+----
+
+This generates a configuration file with the following structure:
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "s3_region": null,
+  "s3_endpoint": null,
+  "github_token": null
+}
+----
+
+=== Configuration Parameters
+
+[cols="1,1,3"]
+|===
+| Parameter | Type | Description
+
+| `max_concurrent_downloads`
+| Integer
+| Maximum number of packages to download simultaneously (default: 5)
+
+| `retry_attempts`
+| Integer
+| Number of retry attempts for failed downloads (default: 3)
+
+| `timeout_seconds`
+| Integer
+| HTTP request timeout in seconds (default: 300)
+
+| `s3_region`
+| String (optional)
+| AWS region for S3 operations (e.g., "us-east-1")
+
+| `s3_endpoint`
+| String (optional)
+| Custom S3 endpoint for MinIO or other S3-compatible services
+
+| `github_token`
+| String (optional)
+| GitHub Personal Access Token for API authentication
+|===
+
+=== Environment Variables
+
+The tool recognizes several environment variables for configuration:
+
+*Note*: With rattler integration, the tool now provides enhanced validation and error reporting for configuration issues.
+
+[cols="1,3"]
+|===
+| Variable | Description
+
+| `GITHUB_TOKEN`
+| GitHub Personal Access Token (overrides config file)
+
+| `AWS_ACCESS_KEY_ID`
+| AWS access key for S3 operations
+
+| `AWS_SECRET_ACCESS_KEY`
+| AWS secret key for S3 operations
+
+| `RUST_LOG`
+| Logging level (error, warn, info, debug, trace)
+|===
+
+== Repository Types
+
+=== Local Repository
+
+Local repositories store packages directly on the filesystem. This is ideal for:
+
+* Creating package caches for offline use
+* Feeding packages to local conda/mamba installations
+* Building custom package repositories
+
+==== Rattler Cache Integration
+
+The Rattler cache directory (`~/.cache/rattler/cache/pkgs/`) is a special local repository location that tools like pixi use to cache downloaded packages.
+
+*Benefits of using Rattler cache:*
+
+* Automatic discovery by pixi and other Rattler-based tools
+* Reduced download times for frequently used packages
+* Shared cache across multiple projects
+
+*Location by platform:*
+
+* Linux: `~/.cache/rattler/cache/pkgs/`
+* macOS: `~/Library/Caches/rattler/cache/pkgs/`
+* Windows: `%LOCALAPPDATA%\rattler\cache\pkgs\`
+
+=== S3/MinIO Repository
+
+S3-compatible repositories enable cloud-based package storage with the following benefits:
+
+* Scalable storage
+* High availability
+* Integration with existing cloud infrastructure
+* Support for MinIO for on-premise object storage
+
+=== prefix.dev Repository
+
+prefix.dev channels provide hosted conda repositories with features like:
+
+* Web-based package browsing
+* Automatic metadata generation
+* CDN-backed distribution
+* Integration with conda/mamba clients
+
+== Usage Examples
+
+=== Basic Operations
+
+==== Mirror Single Package to Local Repository
+
+[source,bash]
+----
+meso-forge-mirror mirror \
+  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --target-type local \
+  --target-path ./my-local-repo
+----
+
+*Enhanced Behavior*: The tool now automatically:
+- Validates the conda package format and integrity
+- Extracts metadata (name, version, build, platform)
+- Organizes packages into platform-specific subdirectories (linux-64/, osx-64/, etc.)
+- Generates repodata.json files for each platform
+- Verifies checksums (MD5 and SHA256)
+
+==== Mirror to Rattler Cache
+
+[source,bash]
+----
+meso-forge-mirror mirror \
+  --sources "https://example.com/packages/my-package-1.0.0.tar.bz2" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/
+----
+
+*Rattler Integration Benefits*:
+- Packages are stored in the proper cache structure expected by pixi and other rattler-based tools
+- Metadata is extracted and validated using rattler's native conda package parsing
+- Platform detection ensures packages are stored in the correct subdirectories
+- Cache integrity is maintained through proper checksum validation
+
+==== Mirror Multiple Packages
+
+[source,bash]
+----
+# Using multiple --sources flags
+meso-forge-mirror mirror \
+  --sources "https://example.com/pkg1.tar.bz2" \
+  --sources "https://example.com/pkg2.tar.bz2" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/
+
+# Using comma-separated values
+meso-forge-mirror mirror \
+  --sources "https://example.com/pkg1.tar.bz2,https://example.com/pkg2.tar.bz2" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/
+----
+
+=== Advanced Operations
+
+==== Mirror to S3 with Custom Configuration
+
+[source,bash]
+----
+export AWS_ACCESS_KEY_ID="your_access_key"
+export AWS_SECRET_ACCESS_KEY="your_secret_key"
+
+meso-forge-mirror mirror \
+  --sources "https://example.com/packages/my-package-1.0.0.tar.bz2" \
+  --target-type s3 \
+  --target-path "s3://my-conda-bucket/linux-64/" \
+  --config ./config.json
+----
+
+==== Mirror to MinIO
+
+Create a MinIO-specific configuration:
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 10,
+  "retry_attempts": 5,
+  "timeout_seconds": 600,
+  "s3_region": "us-east-1",
+  "s3_endpoint": "http://localhost:9000"
+}
+----
+
+[source,bash]
+----
+export AWS_ACCESS_KEY_ID="minio_access_key"
+export AWS_SECRET_ACCESS_KEY="minio_secret_key"
+
+meso-forge-mirror mirror \
+  --sources "https://example.com/package.tar.bz2" \
+  --target-type s3 \
+  --target-path "s3://conda-packages/linux-64/" \
+  --config ./minio-config.json
+----
+
+==== Mirror to prefix.dev Channel
+
+[source,bash]
+----
+meso-forge-mirror mirror \
+  --sources "https://example.com/package.tar.bz2" \
+  --target-type prefix-dev \
+  --target-path "https://prefix.dev/channels/my-channel"
+----
+
+== Operational Workflows
+
+=== Working with Staged Recipes
+
+When packages are pending in conda-forge staged recipes, you can mirror the CI-built artifacts:
+
+. Find the relevant PR in https://github.com/conda-forge/staged-recipes/pulls
+. Locate build artifacts from the CI/CD pipeline
+. Extract the download URLs for the built packages
+. Use meso-forge-mirror to copy them to your target repository
+
+*Example workflow:*
+
+[source,bash]
+----
+# Mirror staged recipe artifacts to local cache
+meso-forge-mirror mirror \
+  --sources "https://github.com/conda-forge/staged-recipes/suites/12345/artifacts/67890/download" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/ \
+  --config ./config-with-github.json
+----
+
+=== Setting up Local Package Cache
+
+Create a comprehensive local package cache:
+
+[source,bash]
+----
+# Create dedicated directory structure
+mkdir -p ~/conda-mirror/{linux-64,osx-64,win-64,noarch}
+
+# Mirror platform-specific packages
+meso-forge-mirror mirror \
+  --sources "https://example.com/linux-64/package1.conda" \
+  --sources "https://example.com/linux-64/package2.conda" \
+  --target-type local \
+  --target-path ~/conda-mirror/linux-64/
+
+# Configure conda/mamba to use local mirror
+conda config --add channels file://~/conda-mirror
+----
+
+=== Batch Operations
+
+For mirroring large numbers of packages, create a script:
+
+[source,bash]
+----
+#!/bin/bash
+# batch-mirror.sh
+
+PACKAGES=(
+    "https://example.com/pkg1.conda"
+    "https://example.com/pkg2.conda"
+    "https://example.com/pkg3.conda"
+)
+
+TARGET_PATH="~/.cache/rattler/cache/pkgs/"
+
+for package in "${PACKAGES[@]}"; do
+    echo "Mirroring $package..."
+    meso-forge-mirror mirror \
+        --sources "$package" \
+        --target-type local \
+        --target-path "$TARGET_PATH" \
+        --config ./config.json
+done
+----
+
+== Monitoring and Logging
+
+=== Log Levels
+
+Control logging verbosity using the `RUST_LOG` environment variable:
+
+[source,bash]
+----
+# Error messages only
+RUST_LOG=error meso-forge-mirror mirror ...
+
+# Information and error messages
+RUST_LOG=info meso-forge-mirror mirror ...
+
+# Debug information (verbose)
+RUST_LOG=debug meso-forge-mirror mirror ...
+
+# Trace information (very verbose)
+RUST_LOG=trace meso-forge-mirror mirror ...
+----
+
+=== Output Interpretation
+
+The tool provides structured logging output:
+
+[source,text]
+----
+2024-01-15T10:30:00.123Z INFO meso_forge_mirror: Starting package mirroring
+2024-01-15T10:30:00.234Z INFO repository: Uploading package1.conda to local repository at ~/.cache/rattler/cache/pkgs/
+2024-01-15T10:30:01.345Z INFO repository: Successfully uploaded package1.conda to local repository
+2024-01-15T10:30:01.456Z INFO meso_forge_mirror: Mirroring completed successfully
+----
+
+=== Error Handling
+
+Common error scenarios and solutions:
+
+[cols="2,3"]
+|===
+| Error | Solution
+
+| Network timeout
+| Increase `timeout_seconds` in configuration
+
+| Download failures
+| Increase `retry_attempts` and check network connectivity
+
+| S3 access denied
+| Verify AWS credentials and bucket permissions
+
+| Local file permission errors
+| Check write permissions on target directory
+
+| GitHub rate limiting
+| Provide `github_token` in configuration
+|===
+
+== Performance Tuning
+
+=== Concurrent Downloads
+
+Adjust `max_concurrent_downloads` based on:
+
+* Available network bandwidth
+* Target repository capacity
+* System resources
+
+*Recommendations:*
+* Local repositories: 10-20 concurrent downloads
+* S3/MinIO: 5-10 concurrent downloads
+* prefix.dev: 3-5 concurrent downloads
+
+=== Memory Considerations
+
+The tool streams package data to minimize memory usage, but consider:
+
+* Large packages may require additional memory
+* Concurrent operations multiply memory usage
+* Monitor system resources during batch operations
+
+== Security Considerations
+
+=== Credential Management
+
+* Store AWS credentials in environment variables or AWS credential files
+* Use IAM roles when running on AWS infrastructure
+* Rotate access keys regularly
+* Limit S3 bucket permissions to necessary operations
+
+=== GitHub Token Security
+
+* Use Personal Access Tokens with minimal required scopes
+* Store tokens in environment variables, not configuration files
+* Consider using GitHub Apps for organizational deployments
+
+=== Network Security
+
+* Use HTTPS URLs for all package sources
+* Verify package integrity when possible
+* Consider using private networks for internal mirrors
+
+== Troubleshooting
+
+=== Common Issues
+
+==== Package Download Failures
+
+[source,bash]
+----
+# Enable debug logging to diagnose issues
+RUST_LOG=debug meso-forge-mirror mirror \
+  --sources "https://problematic-url.com/package.conda" \
+  --target-type local \
+  --target-path ./debug-test
+----
+
+==== S3 Configuration Problems
+
+[source,bash]
+----
+# Test AWS credentials
+aws s3 ls s3://your-bucket/
+
+# Verify MinIO connectivity
+aws --endpoint-url http://your-minio:9000 s3 ls s3://your-bucket/
+----
+
+==== Local Path Issues
+
+[source,bash]
+----
+# Check permissions
+ls -la $(dirname ~/.cache/rattler/cache/pkgs/)
+
+# Create directory if missing
+mkdir -p ~/.cache/rattler/cache/pkgs/
+----
+
+=== Recovery Procedures
+
+==== Resume Interrupted Operations
+
+The tool handles individual package failures gracefully. For large batch operations:
+
+. Review logs to identify failed packages
+. Extract failed URLs
+. Re-run with only the failed packages
+. Monitor for consistent failures that may indicate systemic issues
+
+*Enhanced Error Reporting*: With rattler integration, the tool now provides:
+- Detailed conda package validation errors
+- Specific platform detection failures
+- Metadata extraction error details
+- Repository structure validation warnings
+
+==== Cache Cleanup
+
+Periodic cleanup of local caches:
+
+[source,bash]
+----
+# Remove packages older than 30 days
+find ~/.cache/rattler/cache/pkgs/ -name "*.conda" -mtime +30 -delete
+find ~/.cache/rattler/cache/pkgs/ -name "*.tar.bz2" -mtime +30 -delete
+
+# Clean empty directories
+find ~/.cache/rattler/cache/pkgs/ -type d -empty -delete
+----
+
+== Integration Examples
+
+=== CI/CD Pipeline Integration
+
+[source,yaml]
+----
+# .github/workflows/mirror-packages.yml
+name: Mirror Staged Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_urls:
+        description: 'Comma-separated package URLs'
+        required: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install meso-forge-mirror
+      run: |
+        cargo build --release
+        sudo cp target/release/meso-forge-mirror /usr/local/bin/
+    - name: Mirror packages
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        meso-forge-mirror mirror \
+          --sources "${{ github.event.inputs.package_urls }}" \
+          --target-type s3 \
+          --target-path "s3://conda-staging/packages/"
+----
+
+=== Docker Integration
+
+[source,dockerfile]
+----
+FROM rust:1.75 as builder
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/meso-forge-mirror /usr/local/bin/
+ENTRYPOINT ["meso-forge-mirror"]
+----
+
+== Best Practices
+
+=== Repository Management
+
+* Use consistent directory structures across environments
+* Implement regular backup procedures for local repositories
+* Monitor storage usage and implement cleanup policies
+* Document package sources and mirroring schedules
+
+=== Operational Procedures
+
+* Test mirroring operations in non-production environments first
+* Implement monitoring for failed operations
+* Maintain configuration files in version control
+* Use descriptive naming conventions for repositories and channels
+
+=== Performance Optimization
+
+* Profile network and storage performance regularly
+* Adjust concurrency settings based on infrastructure capacity
+* Consider geographically distributed mirrors for global organizations
+* Implement caching strategies for frequently accessed packages
+
+== Appendix
+
+=== Configuration Examples
+
+==== Production S3 Configuration
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 8,
+  "retry_attempts": 5,
+  "timeout_seconds": 600,
+  "s3_region": "us-east-1",
+  "s3_endpoint": null,
+  "github_token": null
+}
+----
+
+*Rattler-Enhanced Performance*: With conda package validation, consider:
+- Reducing concurrent downloads (3-5) for thorough validation
+- Increasing timeout for metadata extraction operations
+- Monitoring memory usage during package processing
+
+==== Development Local Configuration
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 3,
+  "retry_attempts": 2,
+  "timeout_seconds": 120,
+  "s3_region": null,
+  "s3_endpoint": null,
+  "github_token": null
+}
+----
+
+=== Useful Commands Reference
+
+[source,bash]
+----
+# Initialize configuration
+meso-forge-mirror init-config -o config.json
+
+# Mirror to Rattler cache
+meso-forge-mirror mirror \
+  --sources "URL1,URL2" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/
+
+# Mirror to S3 with config
+meso-forge-mirror mirror \
+  --sources "URL" \
+  --target-type s3 \
+  --target-path "s3://bucket/path" \
+  --config config.json
+
+# Debug mode (enhanced logging for conda package processing)
+RUST_LOG=debug meso-forge-mirror mirror ...
+
+# Check version
+meso-forge-mirror --version
+
+# Validate specific conda package (conceptual - shows enhanced capabilities)
+# The tool now automatically validates all packages during mirroring
+----
+
+== Rattler Integration Details
+
+=== Package Processing Pipeline
+
+The enhanced tool now follows this processing pipeline for each conda package:
+
+1. **Download Validation**: Verify the downloaded file is a valid conda package (.conda or .tar.bz2)
+2. **Metadata Extraction**: Extract package metadata including:
+   - Package name and version
+   - Build string and number
+   - Platform and architecture
+   - Dependencies and constraints
+   - License information
+3. **Platform Detection**: Automatically detect target platform from metadata or filename
+4. **Checksum Calculation**: Generate MD5 and SHA256 checksums for integrity verification
+5. **Repository Organization**: Place package in appropriate platform subdirectory
+6. **Repodata Generation**: Update or create repodata.json files for conda compatibility
+
+=== Enhanced Error Handling
+
+The rattler integration provides detailed error reporting for:
+
+[cols="2,3"]
+|===
+| Error Type | Enhanced Information
+
+| Invalid Package Format
+| Specific details about why the file isn't a valid conda package
+
+| Metadata Extraction Failure
+| Information about missing or corrupted index.json files
+
+| Platform Detection Issues
+| Details about filename parsing and platform identification attempts
+
+| Checksum Mismatches
+| Comparison of expected vs. calculated checksums
+
+| Repository Structure Problems
+| Specific directory creation or permission issues
+|===
+
+=== Performance Considerations
+
+With enhanced conda package processing:
+
+* **Memory Usage**: Slightly increased due to metadata extraction and validation
+* **Processing Time**: Additional time for package validation and checksum calculation
+* **Disk I/O**: More writes due to platform-organized directory structure and repodata files
+* **Network Impact**: No change to download behavior, only post-processing enhancement
+
+=== Compatibility
+
+The enhanced tool maintains full backward compatibility while adding:
+
+* **Input Compatibility**: Works with existing URLs and package sources
+* **Output Structure**: Creates proper conda repository structure
+* **Configuration**: All existing configuration options remain unchanged
+* **CLI Interface**: No changes to command-line usage

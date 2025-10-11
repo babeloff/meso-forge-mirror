@@ -1,18 +1,29 @@
 # meso-forge-mirror
 
-A Rust application for mirroring conda packages from various sources to target repositories. This tool is particularly useful when you want to use packages that are waiting to be included in conda-forge but are taking a long time to go through the process.
+A Rust application for mirroring conda packages from various sources to target repositories with full conda ecosystem integration. This tool is particularly useful when you want to use packages that are waiting to be included in conda-forge but are taking a long time to go through the process.
+
+**Enhanced with Rattler Integration**: Version 0.2.0 introduces comprehensive conda package processing, validation, and proper repository structure management through integration with the rattler ecosystem crates.
 
 ## Features
 
-- Mirror conda packages from URLs to different target repositories
-- Support for multiple target repository types:
+### Enhanced Conda Package Processing (v0.2.0+)
+- **Full Conda Package Validation**: Integration with rattler ecosystem for proper conda package handling
+- **Metadata Extraction**: Automatic extraction of package metadata (name, version, build, dependencies)
+- **Platform-Aware Organization**: Automatic organization by platform (linux-64/, osx-64/, noarch/, etc.)
+- **Repository Structure**: Generates proper conda repository structure with repodata.json files
+- **Integrity Verification**: MD5 and SHA256 checksum validation for all packages
+- **Rattler Cache Integration**: Native support for `~/.cache/rattler/cache/pkgs/` directory structure
+
+### Core Mirroring Features
+- Mirror conda packages from URLs to different target repository types:
+  - **Local** repositories with proper conda structure (including Rattler cache)
+  - **S3/MinIO** repositories with platform organization
   - **prefix.dev** channels (e.g., `https://prefix.dev/channels/meso-forge`)
-  - **S3/MinIO** repositories
-  - **Local** repositories (where pixi caches its repositories)
 - Concurrent downloads with configurable parallelism
 - Automatic retry with exponential backoff
 - Configurable timeouts and connection settings
 - GitHub integration for fetching artifacts
+- Enhanced error handling and diagnostics
 
 ## Installation
 
@@ -141,6 +152,15 @@ meso-forge-mirror mirror \
   --target-path ~/.pixi/cache/packages
 ```
 
+## Documentation
+
+For comprehensive documentation, see the `docs/` directory:
+
+- **[Operator Guide](docs/operator-guide.adoc)**: Complete installation, configuration, and usage guide
+- **[Rattler Integration Summary](docs/rattler-integration-summary.adoc)**: Overview of rattler ecosystem integration benefits
+- **[Changelog](docs/changelog-rattler-integration.adoc)**: Detailed changelog for version 0.2.0 improvements
+- **[Documentation Index](docs/index.adoc)**: Complete documentation overview
+
 ## Development
 
 ### Building
@@ -161,12 +181,40 @@ cargo test
 cargo clippy
 ```
 
+### Running with Debug Logging
+
+```bash
+RUST_LOG=debug cargo run -- mirror --sources "..." --target-type local --target-path ./test-repo
+```
+
 ## Environment Variables
 
 - `GITHUB_TOKEN`: GitHub personal access token for API authentication
 - `AWS_ACCESS_KEY_ID`: AWS access key for S3 operations
 - `AWS_SECRET_ACCESS_KEY`: AWS secret key for S3 operations
-- `RUST_LOG`: Set logging level (e.g., `RUST_LOG=debug`)
+- `RUST_LOG`: Set logging level (e.g., `RUST_LOG=debug`) - Enhanced with detailed conda package processing logs
+
+## What's New in v0.2.0
+
+The latest release introduces major improvements through rattler ecosystem integration:
+
+### 🎯 **Enhanced Package Processing**
+- Full conda package validation and metadata extraction
+- Platform-aware repository organization (linux-64/, osx-64/, etc.)
+- Automatic repodata.json generation for conda compatibility
+- Comprehensive checksum verification (MD5/SHA256)
+
+### 🏗️ **Proper Repository Structure**
+- Conda-compliant repository layout
+- Native Rattler cache integration (`~/.cache/rattler/cache/pkgs/`)
+- Multi-platform support with organized subdirectories
+- Seamless integration with pixi, mamba, and conda
+
+### 🛡️ **Reliability & Validation**
+- Enhanced error handling with detailed diagnostics
+- Package integrity validation prevents corrupted mirrors
+- Robust platform detection with fallback mechanisms
+- Comprehensive logging for debugging and monitoring
 
 ## License
 
@@ -174,8 +222,11 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a Pull Request. See the [documentation](docs/index.adoc) for development guidelines and architecture overview.
 
 ## Support
 
-For issues and questions, please open an issue on the GitHub repository.
+For issues and questions:
+1. Check the [Operator Guide troubleshooting section](docs/operator-guide.adoc#troubleshooting)
+2. Review the [changelog](docs/changelog-rattler-integration.adoc) for recent changes
+3. Open an issue on the GitHub repository with detailed logs (`RUST_LOG=debug`)

@@ -1,0 +1,331 @@
+name: Build and Publish Conda Package
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish_to_conda_forge:
+        description: 'Publish to conda-forge'
+        required: false
+        default: false
+        type: boolean
+      publish_to_prefix_dev:
+        description: 'Publish to prefix.dev'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-conda-packages:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-64
+            rust-target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: osx-64
+            rust-target: x86_64-apple-darwin
+          - os: macos-latest
+            target: osx-arm64
+            rust-target: aarch64-apple-darwin
+          - os: windows-latest
+            target: win-64
+            rust-target: x86_64-pc-windows-gnu
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.rust-target }}
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-${{ matrix.rust-target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install pkg-config openssl
+
+    - name: Install system dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Windows dependencies are handled by vcpkg or similar
+        echo "Windows dependencies handled by cargo"
+
+    - name: Build Rust binary
+      run: |
+        cargo build --release --target ${{ matrix.rust-target }} --locked
+
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        conda-solver: libmamba
+        channels: conda-forge,nodefaults
+        channel-priority: strict
+
+    - name: Install conda-build and dependencies
+      shell: bash -l {0}
+      run: |
+        conda install -y conda-build conda-verify anaconda-client boa rattler-build
+
+    - name: Prepare conda recipe
+      shell: bash -l {0}
+      run: |
+        # Create platform-specific conda recipe
+        mkdir -p conda-recipe-${{ matrix.target }}
+        cp -r conda-recipe/* conda-recipe-${{ matrix.target }}/
+
+        # Update meta.yaml for cross-compilation
+        cd conda-recipe-${{ matrix.target }}
+
+        # Set target platform in meta.yaml
+        echo "target_platform: ${{ matrix.target }}" >> conda_build_config.yaml
+        echo "rust_compiler_version: 1.70" >> conda_build_config.yaml
+
+    - name: Build conda package with conda-build
+      shell: bash -l {0}
+      run: |
+        cd conda-recipe-${{ matrix.target }}
+
+        # Set environment variables for cross-compilation
+        export CARGO_BUILD_TARGET=${{ matrix.rust-target }}
+        export CONDA_BUILD_CROSS_COMPILATION=1
+
+        # Build package
+        conda build . --output-folder ../conda-packages --variants "{'target_platform': ['${{ matrix.target }}']}"
+
+    - name: Build conda package with rattler-build (alternative)
+      shell: bash -l {0}
+      continue-on-error: true
+      run: |
+        # Try building with rattler-build as well
+        rattler-build build --recipe conda-recipe/recipe.yaml --target-platform ${{ matrix.target }} --output-dir rattler-packages/
+
+    - name: Verify conda package
+      shell: bash -l {0}
+      run: |
+        # Find the built package
+        PACKAGE_FILE=$(find conda-packages -name "meso-forge-mirror-*.tar.bz2" -o -name "meso-forge-mirror-*.conda" | head -1)
+
+        if [ -n "$PACKAGE_FILE" ]; then
+          echo "Built package: $PACKAGE_FILE"
+          conda verify "$PACKAGE_FILE" || true
+
+          # Test installation in a temporary environment
+          conda create -n test-env-${{ matrix.target }} --use-local meso-forge-mirror -y
+          conda activate test-env-${{ matrix.target }}
+
+          # Test basic functionality
+          meso-forge-mirror --version
+          meso-forge-mirror --help
+
+          echo "Package verification completed for ${{ matrix.target }}"
+        else
+          echo "No package file found!"
+          exit 1
+        fi
+
+    - name: Upload conda package artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: conda-package-${{ matrix.target }}
+        path: |
+          conda-packages/
+          rattler-packages/
+        retention-days: 30
+
+  publish-packages:
+    needs: build-conda-packages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        conda-solver: libmamba
+        channels: conda-forge,nodefaults
+        channel-priority: strict
+
+    - name: Install publishing tools
+      shell: bash -l {0}
+      run: |
+        conda install -y anaconda-client rattler-build
+
+    - name: Download all conda packages
+      uses: actions/download-artifact@v4
+      with:
+        pattern: conda-package-*
+        path: all-packages/
+        merge-multiple: true
+
+    - name: List downloaded packages
+      run: |
+        find all-packages/ -name "*.tar.bz2" -o -name "*.conda" | sort
+
+    - name: Publish to Anaconda Cloud (test channel)
+      shell: bash -l {0}
+      if: github.ref == 'refs/heads/main'
+      env:
+        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+      run: |
+        # Upload to test channel for main branch builds
+        for package in $(find all-packages/ -name "meso-forge-mirror-*.tar.bz2" -o -name "meso-forge-mirror-*.conda"); do
+          echo "Uploading $package to test channel..."
+          anaconda -t $ANACONDA_API_TOKEN upload --user meso-forge --label test --force "$package"
+        done
+
+    - name: Publish to Anaconda Cloud (main channel)
+      shell: bash -l {0}
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+      run: |
+        # Upload to main channel for tagged releases
+        for package in $(find all-packages/ -name "meso-forge-mirror-*.tar.bz2" -o -name "meso-forge-mirror-*.conda"); do
+          echo "Uploading $package to main channel..."
+          anaconda -t $ANACONDA_API_TOKEN upload --user meso-forge "$package"
+        done
+
+    - name: Publish to prefix.dev
+      shell: bash -l {0}
+      if: github.event.inputs.publish_to_prefix_dev == 'true' || startsWith(github.ref, 'refs/tags/v')
+      env:
+        PREFIX_API_KEY: ${{ secrets.PREFIX_API_KEY }}
+      run: |
+        # Upload to prefix.dev channel
+        for package in $(find all-packages/ -name "meso-forge-mirror-*.tar.bz2" -o -name "meso-forge-mirror-*.conda"); do
+          echo "Uploading $package to prefix.dev..."
+          rattler-build upload prefix.dev --api-key $PREFIX_API_KEY --channel meso-forge "$package"
+        done
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          all-packages/**/meso-forge-mirror-*.tar.bz2
+          all-packages/**/meso-forge-mirror-*.conda
+        body: |
+          ## Conda Packages
+
+          This release includes conda packages for multiple platforms:
+
+          - `linux-64`: Linux x86_64
+          - `osx-64`: macOS x86_64 (Intel)
+          - `osx-arm64`: macOS ARM64 (Apple Silicon)
+          - `win-64`: Windows x86_64
+
+          ### Installation
+
+          #### From conda-forge (recommended):
+          ```bash
+          conda install -c conda-forge meso-forge-mirror
+          ```
+
+          #### From our channel:
+          ```bash
+          conda install -c meso-forge meso-forge-mirror
+          ```
+
+          #### Using pixi:
+          ```bash
+          pixi add meso-forge-mirror
+          ```
+
+          ### What's New
+
+          See [CHANGELOG.md](CHANGELOG.md) for detailed changes in this release.
+
+  test-conda-packages:
+    needs: build-conda-packages
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        auto-update-conda: true
+        conda-solver: libmamba
+        channels: conda-forge,nodefaults
+        channel-priority: strict
+
+    - name: Download conda packages
+      uses: actions/download-artifact@v4
+      with:
+        pattern: conda-package-*
+        path: test-packages/
+        merge-multiple: true
+
+    - name: Test conda package installation
+      shell: bash -l {0}
+      run: |
+        # Create a test environment and install our package
+        conda create -n test-install python=3.11 -y
+        conda activate test-install
+
+        # Find the appropriate package for this platform
+        PACKAGE_FILE=""
+        case "${{ runner.os }}" in
+          Linux)   PACKAGE_FILE=$(find test-packages/ -path "*/linux-64/meso-forge-mirror-*.conda" -o -path "*/linux-64/meso-forge-mirror-*.tar.bz2" | head -1) ;;
+          macOS)   PACKAGE_FILE=$(find test-packages/ -path "*/osx-*/meso-forge-mirror-*.conda" -o -path "*/osx-*/meso-forge-mirror-*.tar.bz2" | head -1) ;;
+          Windows) PACKAGE_FILE=$(find test-packages/ -path "*/win-64/meso-forge-mirror-*.conda" -o -path "*/win-64/meso-forge-mirror-*.tar.bz2" | head -1) ;;
+        esac
+
+        if [ -n "$PACKAGE_FILE" ]; then
+          echo "Installing package: $PACKAGE_FILE"
+          conda install "$PACKAGE_FILE" -y
+
+          # Test the installed binary
+          meso-forge-mirror --version
+          meso-forge-mirror --help
+
+          # Test init-config functionality
+          meso-forge-mirror init-config -o test-config.json
+          test -f test-config.json
+          echo "Package test successful!"
+        else
+          echo "No suitable package found for ${{ runner.os }}"
+          exit 1
+        fi

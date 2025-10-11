@@ -14,7 +14,7 @@ pub async fn mirror_packages(
     target_path: &str,
     config: &Config,
 ) -> Result<()> {
-    let repository = Repository::new(target_type, target_path.to_string());
+    let mut repository = Repository::new(target_type, target_path.to_string());
     let client = build_client(config)?;
 
     info!("Starting mirroring of {} packages", sources.len());
@@ -23,9 +23,9 @@ pub async fn mirror_packages(
     let results = stream::iter(sources)
         .map(|source| {
             let client = client.clone();
-            let repository = repository.clone();
+            let mut repository = repository.clone();
             let config = config.clone();
-            async move { mirror_single_package(&client, source, &repository, &config).await }
+            async move { mirror_single_package(&client, source, &mut repository, &config).await }
         })
         .buffer_unordered(config.max_concurrent_downloads)
         .collect::<Vec<_>>()
@@ -49,6 +49,12 @@ pub async fn mirror_packages(
         "Mirroring completed: {} succeeded, {} failed",
         success_count, error_count
     );
+
+    // Finalize repository structure
+    if success_count > 0 {
+        info!("Finalizing repository structure and generating metadata");
+        repository.finalize_repository().await?;
+    }
 
     if error_count > 0 {
         Err(anyhow!("{} packages failed to mirror", error_count))
@@ -77,7 +83,7 @@ fn build_client(config: &Config) -> Result<Client> {
 async fn mirror_single_package(
     client: &Client,
     source: &str,
-    repository: &Repository,
+    repository: &mut Repository,
     config: &Config,
 ) -> Result<()> {
     info!("Mirroring package from: {}", source);

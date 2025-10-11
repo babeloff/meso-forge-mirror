@@ -1,0 +1,112 @@
+= Meso Forge Mirror Documentation
+:toc: left
+:toclevels: 2
+:sectnums:
+:icons: font
+:source-highlighter: rouge
+
+== Welcome to Meso Forge Mirror
+
+Meso Forge Mirror is a Rust-based command-line tool designed to mirror conda packages from various sources to target repositories with full conda ecosystem integration through the rattler crates.
+
+== Getting Started
+
+If you're new to meso-forge-mirror, start with the link:operator-guide.adoc[Operator Guide] which provides comprehensive instructions for installation, configuration, and usage.
+
+== Documentation Index
+
+=== Core Documentation
+
+==== link:operator-guide.adoc[Operator Guide]
+Comprehensive guide for operators covering:
+
+* Installation and configuration
+* Repository types and usage patterns
+* Rattler cache integration
+* Performance tuning and troubleshooting
+* Advanced operational workflows
+
+=== Release Documentation
+
+==== link:changelog-rattler-integration.adoc[Rattler Integration Changelog]
+Detailed changelog documenting the major improvements in version 0.2.0:
+
+* New conda package processing capabilities
+* Enhanced repository management features
+* Technical improvements and architecture changes
+* Migration notes and compatibility information
+
+==== link:rattler-integration-summary.adoc[Rattler Integration Summary]
+High-level summary of the rattler ecosystem integration benefits:
+
+* Before/after comparisons of functionality
+* Operational benefits for different user types
+* Performance characteristics and migration path
+* Future roadmap and enhancement plans
+
+== Key Features
+
+=== Enhanced Conda Package Processing
+* Full integration with rattler ecosystem for proper package handling
+* Automatic metadata extraction and validation
+* Platform-aware package organization
+* Comprehensive integrity verification with checksums
+
+=== Repository Structure Management
+* Conda-compliant repository structure with platform subdirectories
+* Automatic generation of repodata.json files
+* Native support for Rattler cache directories
+* S3/MinIO and prefix.dev integration
+
+=== Operational Excellence
+* Enhanced error handling and diagnostics
+* Comprehensive logging for debugging and monitoring
+* Backward compatibility with existing workflows
+* Robust validation pipeline for package integrity
+
+== Quick Start
+
+For immediate usage, here's a basic example of mirroring packages to the Rattler cache:
+
+[source,bash]
+----
+# Mirror packages directly to rattler cache
+meso-forge-mirror mirror \
+  --sources "https://example.com/package1.conda,https://example.com/package2.conda" \
+  --target-type local \
+  --target-path ~/.cache/rattler/cache/pkgs/
+----
+
+== Architecture Overview
+
+The tool is built with a modular architecture leveraging the rattler ecosystem:
+
+* **Core Processing**: Integration with `rattler_conda_types` for type-safe conda operations
+* **Package Streaming**: Uses `rattler_package_streaming` for efficient package processing
+* **Platform Detection**: Leverages `rattler_virtual_packages` for accurate platform identification
+* **Repository Management**: Custom implementation with conda ecosystem compatibility
+
+== Support and Contributing
+
+=== Getting Help
+* Check the link:operator-guide.adoc#troubleshooting[troubleshooting section] for common issues
+* Review the link:changelog-rattler-integration.adoc[changelog] for recent changes
+* Enable debug logging with `RUST_LOG=debug` for detailed diagnostics
+
+=== Contributing
+Contributions are welcome! The tool is open source and follows standard Rust development practices:
+
+* Unit tests for core functionality
+* Integration tests for real-world scenarios
+* Comprehensive documentation and examples
+* Type-safe error handling throughout
+
+== Version Information
+
+This documentation covers meso-forge-mirror version 0.2.0 with rattler ecosystem integration.
+
+For previous versions or migration information, see the link:changelog-rattler-integration.adoc[changelog documentation].
+
+---
+
+Last updated: {localdate}
