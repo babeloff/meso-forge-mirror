@@ -1,0 +1,12 @@
+{
+  "channels": [
+    "file:///home/conda/staged-recipes/build_artifacts/",
+    "https://conda.anaconda.org/conda-forge/"
+  ],
+  "description": "coreos-installer is a program to assist with installing Fedora CoreOS (FCOS)\nand Red Hat Enterprise Linux CoreOS (RHCOS). It can:\n- Install the operating system to a target disk, optionally customizing it\n  with an Ignition config or first-boot kernel parameters\n- Download and verify an operating system image for various cloud,\n  virtualization, or bare metal platforms\n- List Fedora CoreOS images available for download\n- Embed an Ignition config in a live ISO image to customize the running system\n- Wrap an Ignition config in an initrd image for PXE boot customization",
+  "dev_url": "https://github.com/coreos/coreos-installer",
+  "doc_url": "https://coreos.github.io/coreos-installer/",
+  "home": "https://github.com/coreos/coreos-installer",
+  "license": "Apache-2.0",
+  "summary": "Installer for CoreOS disk images"
+}

@@ -1,0 +1,15 @@
+[target.x86_64-unknown-linux-gnu]
+# Use conda environment gcc
+linker = "gcc"
+
+[env]
+# Environment variables to fix AWS SDK compatibility and linking
+AWS_LC_SYS_NO_ASM = "1"
+AWS_LC_SYS_CMAKE_BUILDER = "0"
+OPENSSL_NO_VENDOR = "1"
+
+[profile.release]
+# Optimize for size and performance
+lto = "thin"
+codegen-units = 1
+opt-level = 3

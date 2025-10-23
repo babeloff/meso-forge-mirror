@@ -1,0 +1,20 @@
+{
+  "info": {
+    "subdir": "noarch"
+  },
+  "packages": {
+    "pip-24.0-pyhd8ed1ab_0.conda": {
+      "build": "pyhd8ed1ab_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "",
+      "md5": "f586ac1e56c8638b64f9c8122a7b8a67",
+      "sha256": "b7c1c5d8f13e8cb491c4bd1d0d1896a4cf80fc47de01059ad77509112b664a4a",
+      "size": 1398245,
+      "subdir": "noarch",
+      "name": "pip",
+      "version": "24.0",
+      "timestamp": "2025-10-22T21:59:08.288974978Z"
+    }
+  }
+}

@@ -261,7 +261,7 @@ def test_conda_package [platform: string, config: record] {
         # Test the binary
         conda run -n $test_env meso-forge-mirror --version
         conda run -n $test_env meso-forge-mirror --help
-        conda run -n $test_env meso-forge-mirror init-config -o test-config.json
+        conda run -n $test_env meso-forge-mirror init -o test-config.json
 
         # Cleanup test files
         rm -f test-config.json

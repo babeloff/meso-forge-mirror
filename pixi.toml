@@ -8,237 +8,371 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [dependencies]
 # Build dependencies for Rust development
-rust = ">=1.70"
-cargo = ">=1.70"
-pkg-config = "*"
-openssl = "*"
+rust = ">=1.90,<2.0"
+pkg-config = ">=0.3.25"
+openssl = ">=1.1,<4"
+
+# Cross-compilation toolchain (optional - only needed for cross-compilation)
+# Uncomment these lines if you need cross-compilation support:
+# gcc_linux-64 = ">=10.4"
+# gxx_linux-64 = ">=10.4"
 
 # Conda packaging dependencies
-conda-build = "*"
-boa-build = "*"
-rattler-build = "*"
-anaconda-client = "*"
+conda-build = ">=3.24,<4"
+rattler-build = ">=0.19"
+anaconda-client = ">=1.11,<2"
 
 # Development and testing tools
-git = "*"
-pytest = "*"
-nushell = "*"
+git = ">=2.30"
+pytest = ">=7.0,<9"
+nushell = ">=0.85"
 
 # AWS CLI for S3 testing
-awscli = "*"
+awscli = ">=1.27,<2"
 
-[tasks]
 # === Core Cargo Tasks ===
-build = "cargo build"
-build-release = "cargo build --release"
-test = "cargo test"
-test-verbose = "cargo test --verbose"
-clippy = "cargo clippy -- -D warnings"
-fmt = "cargo fmt"
-fmt-check = "cargo fmt -- --check"
-clean = "cargo clean"
+[tasks.build]
+cmd = "cargo build"
+
+[tasks.build-release]
+cmd = "cargo build --release"
+[tasks.test]
+cmd  = "cargo test"
+[tasks.test-verbose]
+cmd  = "cargo test --verbose"
+[tasks.clippy]
+cmd  = "cargo clippy -- -D warnings"
+[tasks.fmt]
+cmd  = "cargo fmt"
+[tasks.fmt-check]
+cmd  = "cargo fmt -- --check"
+[tasks.clean]
+cmd  = "cargo clean"
 
 # === Advanced Cargo Tasks ===
-check = "cargo check"
-bench = "cargo bench"
-doc = "cargo doc --open"
-update = "cargo update"
-audit = { cmd = "cargo audit", depends_on = ["install-audit"] }
-install-audit = "cargo install cargo-audit"
+[tasks.check]
+cmd = "cargo check"
+[tasks.bench]
+cmd  = "cargo bench"
+[tasks.doc]
+cmd  = "cargo doc --open"
+[tasks.update]
+cmd  = "cargo update"
+[tasks.install-audit]
+cmd  = "cargo install cargo-audit"
 
 # === Nushell-based Testing ===
-test-nu = "nu scripts/test.nu unit"
-test-all-nu = "nu scripts/test.nu all"
-test-integration-nu = "nu scripts/test.nu integration"
-test-lint-nu = "nu scripts/test.nu lint"
-test-local-mirror = "nu scripts/test.nu local-mirror"
-test-config-nu = "nu scripts/test.nu config"
-test-performance = "nu scripts/test.nu performance"
+[tasks.test-nu]
+cmd = "nu scripts/test.nu unit"
+[tasks.test-all-nu]
+cmd  = "nu scripts/test.nu all"
+[tasks.test-integration-nu]
+cmd  = "nu scripts/test.nu integration"
+[tasks.test-lint-nu]
+cmd  = "nu scripts/test.nu lint"
+[tasks.test-local-mirror]
+cmd  = "nu scripts/test.nu local-mirror"
+[tasks.test-config-nu]
+cmd  = "nu scripts/test.nu config"
+[tasks.test-performance]
+cmd  = "nu scripts/test.nu performance"
 
 # === Nushell-based Conda Operations ===
-conda-ops = "nu scripts/conda-ops.nu help"
-conda-build-nu = { cmd = "nu scripts/conda-ops.nu build", depends_on = ["build-release"] }
-conda-build-all-nu = { cmd = "nu scripts/conda-ops.nu build linux-64 osx-64 osx-arm64 win-64", depends_on = ["build-release"] }
-conda-test-nu = "nu scripts/conda-ops.nu test"
-conda-verify-nu = "nu scripts/conda-ops.nu verify"
-conda-publish-nu = "nu scripts/conda-ops.nu publish"
-conda-list-nu = "nu scripts/conda-ops.nu list-packages"
-conda-clean-nu = "nu scripts/conda-ops.nu clean"
-
-# === Development Workflow ===
-dev-setup = { depends_on = ["build", "test", "clippy", "fmt-check"] }
-ci-check = { depends_on = ["build", "test", "clippy", "fmt-check", "build-release"] }
+[tasks.conda-ops]
+cmd = "nu scripts/conda-ops.nu help"
+[tasks.conda-test-nu]
+cmd  = "nu scripts/conda-ops.nu test"
+[tasks.conda-verify-nu]
+cmd  = "nu scripts/conda-ops.nu verify"
+[tasks.conda-publish-nu]
+cmd  = "nu scripts/conda-ops.nu publish"
+[tasks.conda-list-nu]
+cmd  = "nu scripts/conda-ops.nu list-packages"
+[tasks.conda-clean-nu]
+cmd  = "nu scripts/conda-ops.nu clean"
 
 # === Binary Installation ===
-install = "cargo install --path . --force"
-install-debug = "cargo install --path . --debug --force"
+[tasks.install]
+cmd = "cargo install --path . --force"
+[tasks.install-debug]
+cmd  = "cargo install --path . --debug --force"
 
 # === Example and Demo Tasks ===
-run-example = "cargo run -- init-config -o example-config.json"
-demo-local = """
+[tasks.run-example]
+cmd  = "cargo run -- init -o example-config.json"
+[tasks.demo-local]
+cmd  = """
 cargo run -- mirror \
-  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --src-url "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
   --target-type local \
   --target-path ./demo-mirror
 """
 
 # === Conda Package Building ===
-conda-build = { cmd = "conda-build conda-recipe/ --output-folder ./conda-packages", depends_on = ["build-release"] }
-conda-build-all = { cmd = "conda-build conda-recipe/ --output-folder ./conda-packages --variants '{\"target_platform\": [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]}'", depends_on = ["build-release"] }
-
-# Alternative with rattler-build (modern approach)
-rattler-build = { cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --output-dir ./rattler-packages", depends_on = ["build-release"] }
-rattler-build-all = { cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --target-platform linux-64,osx-64,osx-arm64,win-64 --output-dir ./rattler-packages", depends_on = ["build-release"] }
-
-# Cross-platform building with nushell script
-conda-build-cross = { cmd = "nu scripts/build.nu --target all", depends_on = ["build-release"] }
-conda-build-linux = { cmd = "nu scripts/build.nu --target linux-64", depends_on = ["build-release"] }
-conda-build-macos = { cmd = "nu scripts/build.nu --target osx-64", depends_on = ["build-release"] }
-conda-build-macos-arm = { cmd = "nu scripts/build.nu --target osx-arm64", depends_on = ["build-release"] }
-conda-build-windows = { cmd = "nu scripts/build.nu --target win-64", depends_on = ["build-release"] }
-
-# === Package Management ===
-conda-install-local = """
+[tasks.conda-install-local]
+cmd = """
 conda install --use-local meso-forge-mirror
 """
 
-conda-create-env = """
+[tasks.conda-create-env]
+cmd = """
 conda create -n meso-forge-test meso-forge-mirror --use-local -y
 """
 
-conda-test-local = { cmd = """
-conda create -n test-local meso-forge-mirror --use-local -y && \
-conda activate test-local && \
-meso-forge-mirror --version && \
-meso-forge-mirror --help && \
-meso-forge-mirror init-config -o test-config.json
-""", depends_on = ["conda-build"] }
-
-# Verify conda package integrity
-conda-verify = { cmd = "conda verify $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
-
-# === Publishing Tasks ===
-publish-conda-forge = { cmd = "anaconda upload $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
-publish-prefix-dev = { cmd = "rattler-build upload prefix.dev $(find ./rattler-packages -name '*.conda' | head -1)", depends_on = ["rattler-build"] }
-
-# Upload to custom conda channel
-upload-channel = { cmd = "anaconda upload -u ${CONDA_CHANNEL:-meso-forge} $(conda build --output conda-recipe/)", depends_on = ["conda-build"] }
-
-# Upload all built packages to test channel
-upload-test-channel = """
+[tasks.upload-test-channel]
+cmd  = """
 for package in $(find ./conda-packages -name "*.conda" -o -name "*.tar.bz2"); do
   anaconda upload -u ${CONDA_CHANNEL:-meso-forge} --label test --force "$package"
 done
 """
 
-# Batch upload all packages
-upload-all-packages = { depends_on = ["conda-build-all", "upload-all-conda", "upload-all-rattler"] }
-upload-all-conda = """
+[tasks.upload-all-conda]
+cmd  = """
 for package in $(find ./conda-packages -name "*.conda" -o -name "*.tar.bz2"); do
   anaconda upload -u ${CONDA_CHANNEL:-meso-forge} --force "$package"
 done
 """
-upload-all-rattler = """
+[tasks.upload-all-rattler]
+cmd  = """
 for package in $(find ./rattler-packages -name "*.conda"); do
   rattler-build upload prefix.dev --channel meso-forge "$package"
 done
 """
 
 # === Testing with Different Targets ===
-test-s3-local = """
+[tasks.test-s3-local]
+cmd  = """
 AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
 cargo run -- mirror \
-  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
+  --src-url "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
   --target-type s3 \
   --target-path "s3://test-bucket/conda-packages" \
   --config examples/config-minio.json
 """
 
-test-prefix-dev = """
+[tasks.test-prefix-dev]
+cmd  = """
 cargo run -- mirror \
-  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
+  --src-url "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
   --target-type prefix-dev \
   --target-path "https://prefix.dev/channels/test-channel"
 """
 
 # === Maintenance Tasks ===
-deps-outdated = "cargo outdated"
-deps-update = "cargo update"
-security-audit = { cmd = "cargo audit", depends_on = ["install-audit"] }
+[tasks.deps-outdated]
+cmd = "cargo outdated"
+[tasks.deps-update]
+cmd  = "cargo update"
 
 # === Cross-compilation Tasks ===
-build-linux = "cargo build --release --target x86_64-unknown-linux-gnu"
-build-macos = "cargo build --release --target x86_64-apple-darwin"
-build-macos-arm = "cargo build --release --target aarch64-apple-darwin"
-build-windows = "cargo build --release --target x86_64-pc-windows-gnu"
+[tasks.build-platform]
+cmd = "nu scripts/build.nu"
 
 # === Profiling and Performance ===
-profile = """
+[tasks.profile]
+cmd  = """
 cargo build --release && \
 perf record --call-graph=dwarf target/release/meso-forge-mirror mirror \
-  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --src-url "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
   --target-type local \
   --target-path ./profile-test
 """
 
 # === Documentation Tasks ===
-docs-serve = "python -m http.server 8000 -d target/doc"
-docs-build = "cargo doc --no-deps"
-docs-all = "cargo doc --document-private-items"
+[tasks.docs-serve]
+cmd = "python -m http.server 8000 -d target/doc"
+[tasks.docs-build]
+cmd = "cargo doc --no-deps"
+[tasks.docs-all]
+cmd = "cargo doc --document-private-items"
 
-# === Environment Setup ===
-setup-dev = { depends_on = ["install-dev-tools", "build"] }
-install-dev-tools = """
+[tasks.install-dev-tools]
+cmd = """
 cargo install cargo-audit cargo-outdated cargo-watch
 """
 
 # === File Watching for Development ===
-watch = "cargo watch -x check -x test -x run"
-watch-test = "cargo watch -x test"
+[tasks.watch]
+cmd  = "cargo watch -x check -x test -x run"
+[tasks.watch-test]
+cmd = "cargo watch -x test"
 
-# === Release Preparation ===
-pre-release = { depends_on = ["ci-check", "security-audit", "build-release"] }
-prepare-release = { depends_on = ["pre-release", "conda-build-all"] }
-
-# === Integration Testing ===
-integration-test = { depends_on = ["build-release", "test-local-mirror", "test-config-generation"] }
-test-local-mirror = """
-mkdir -p integration-test && \
-cargo run -- mirror \
-  --sources "https://conda.anaconda.org/conda-forge/noarch/pip-24.0-pyhd8ed1ab_0.conda" \
-  --target-type local \
-  --target-path ./integration-test/mirror && \
-test -f ./integration-test/mirror/noarch/pip-24.0-pyhd8ed1ab_0.conda
-"""
-
-test-config-generation = """
-cargo run -- init-config -o integration-test/test-config.json && \
+[tasks.test-config-generation]
+cmd  = """
+cargo run -- init -o integration-test/test-config.json && \
 test -f integration-test/test-config.json
 """
 
 # === Cleanup Tasks ===
-clean-all = { depends_on = ["clean", "clean-examples", "clean-integration", "clean-packages"] }
-clean-examples = "rm -rf demo-mirror example-config.json"
-clean-integration = "rm -rf integration-test"
-clean-packages = "rm -rf conda-packages rattler-packages"
-clean-build-artifacts = "rm -rf target/*/release/meso-forge-mirror*"
+[tasks.clean-examples]
+cmd = "rm -rf demo-mirror example-config.json"
+[tasks.clean-integration]
+cmd = "rm -rf integration-test"
+[tasks.clean-packages]
+cmd = "rm -rf conda-packages rattler-packages"
+[tasks.clean-build-artifacts]
+cmd = "rm -rf target/*/release/meso-forge-mirror*"
 
-[feature]
-# Features for different build configurations
-default = []
-aws = ["build", "test"]
-github = ["build", "test"]
-all-features = ["build", "test"]
+[tasks.audit]
+cmd = "cargo audit"
+depends-on = ["install-audit"]
+
+[tasks.conda-build-nu]
+cmd = "nu scripts/conda-ops.nu build"
+depends-on = ["build-release"]
+
+[tasks.conda-build-all-nu]
+cmd = "nu scripts/conda-ops.nu build linux-64 osx-64 osx-arm64 win-64"
+depends-on = ["build-release"]
+
+[tasks.dev-setup]
+depends-on = ["build", "test", "clippy", "fmt-check"]
+
+[tasks.ci-check]
+depends-on = ["build", "test", "clippy", "fmt-check", "build-release"]
+
+[tasks.conda-build]
+cmd = "conda-build conda-recipe/ --output-folder ./conda-packages"
+depends-on = ["build-release"]
+
+[tasks.conda-build-all]
+cmd = "conda-build conda-recipe/ --output-folder ./conda-packages --variants '{\"target_platform\": [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]}'"
+depends-on = ["build-release"]
+
+[tasks.rattler-build]
+cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --output-dir ./rattler-packages"
+depends-on = ["build-release"]
+
+[tasks.rattler-build-all]
+cmd = "rattler-build build --recipe conda-recipe/recipe.yaml --target-platform linux-64,osx-64,osx-arm64,win-64 --output-dir ./rattler-packages"
+depends-on = ["build-release"]
+
+
+
+[tasks.conda-test-local]
+cmd = """
+conda create -n test-local meso-forge-mirror --use-local -y && \
+conda activate test-local && \
+meso-forge-mirror --version && \
+meso-forge-mirror --help && \
+meso-forge-mirror init -o test-config.json
+"""
+depends-on = ["conda-build"]
+
+[tasks.conda-verify]
+cmd = "conda verify $(conda build --output conda-recipe/)"
+depends-on = ["conda-build"]
+
+[tasks.publish-conda-forge]
+cmd = "anaconda upload $(conda build --output conda-recipe/)"
+depends-on = ["conda-build"]
+
+[tasks.publish-prefix-dev]
+cmd = "rattler-build upload prefix.dev $(find ./rattler-packages -name '*.conda' | head -1)"
+depends-on = ["rattler-build"]
+
+[tasks.upload-channel]
+cmd = "anaconda upload -u ${CONDA_CHANNEL:-meso-forge} $(conda build --output conda-recipe/)"
+depends-on = ["conda-build"]
+
+[tasks.upload-all-packages]
+depends-on = ["conda-build-all", "upload-all-conda", "upload-all-rattler"]
+
+[tasks.security-audit]
+cmd = "cargo audit"
+depends-on = ["install-audit"]
+
+[tasks.setup-dev]
+depends-on = ["install-dev-tools", "build"]
+
+[tasks.pre-release]
+depends-on = ["ci-check", "security-audit", "build-release"]
+
+[tasks.prepare-release]
+depends-on = ["pre-release", "conda-build-all"]
+
+[tasks.integration-test]
+depends-on = ["build-release", "test-local-mirror", "test-config-generation"]
+
+[tasks.clean-all]
+depends-on = ["clean", "clean-examples", "clean-integration", "clean-packages"]
+
+[tasks.capture-azure-artifacts]
+cmd = "bash scripts/capture-azure-artifacts.sh"
+description = "Capture conda packages from Azure DevOps artifacts and install them locally"
+
+[tasks.install-local-packages]
+cmd = "bash -c 'for package in $(find ./local-conda-cache -name \"*.conda\" -o -name \"*.tar.bz2\"); do echo \"Installing: $(basename \"$package\")\"; pixi add --local \"$package\" || echo \"Warning: Failed to install $(basename \"$package\")\"; done'"
+description = "Install all captured conda packages from local cache to pixi environment"
+
+[tasks.mirror-to-local]
+cmd = "./target/release/meso-forge-mirror mirror --src-url <SOURCE_URL> --target-type local --target-path ./local-conda-cache"
+description = "Mirror conda packages to local cache using meso-forge-mirror tool (requires --src-url argument)"
+
+[tasks.meso-forge-mirror]
+cmd = "./target/release/meso-forge-mirror mirror"
+description = "Mirror conda packages to local cache using meso-forge-mirror tool (requires --src-url or --src-file argument)"
+
+[tasks.meso-forge]
+cmd = "./target/release/meso-forge-mirror"
+description = "Mirror conda packages to local cache using meso-forge-mirror tool (requires --src-url or --src-file argument)"
+
+[tasks.setup-local-channel]
+cmd = "bash -c 'mkdir -p ./local-conda-cache && if command -v conda-index >/dev/null 2>&1; then conda-index ./local-conda-cache && echo \"Local conda channel ready at: file://$(pwd)/local-conda-cache\"; else echo \"Warning: conda-index not found. Install conda-build to create package index.\"; fi'"
+description = "Set up local conda channel with package index"
+
+[tasks.process-azure-artifact]
+cmd = "bash scripts/process-downloaded-artifacts.sh"
+description = "Process downloaded Azure DevOps artifact ZIP file containing conda packages"
+
+[tasks.mirror-azure-build]
+cmd = """
+echo "To mirror from Azure build 1372241, use one of these methods:"
+echo ""
+echo "Method 1 - Manual download:"
+echo "  1. Visit: https://dev.azure.com/conda-forge/feedstock-builds/_build/results?buildId=1372241&view=artifacts"
+echo "  2. Download desired artifact (e.g., conda_pkgs_linux.zip)"
+echo "  3. Run: pixi run process-azure-artifact path/to/downloaded.zip"
+echo ""
+echo "Method 2 - Direct conda package URL:"
+echo "  ./target/release/meso-forge-mirror mirror --src-url <package-url> --target-type local --target-path ./local-conda-cache"
+echo ""
+echo "Method 3 - Local ZIP file with regex pattern:"
+echo "  ./target/release/meso-forge-mirror mirror --src-file path/to/artifact.zip --type zip --src-path '^conda-packages/linux-64/.*' --target-type local --target-path ./local-conda-cache"
+echo ""
+echo "Method 4 - Remote ZIP file:"
+echo "  ./target/release/meso-forge-mirror mirror --src-url https://example.com/artifact.zip --type zip --src-path '^artifacts/conda/.*' --target-type local --target-path ./local-conda-cache"
+"""
+description = "Guide for mirroring packages from Azure DevOps build 1372241"
 
 # === Development environment features ===
-[environments]
-dev = { features = ["default"], solve-group = "dev" }
-test = { features = ["default"], solve-group = "test" }
-release = { features = ["default"], solve-group = "release" }
-packaging = { features = ["default"], solve-group = "packaging", dependencies = ["conda-build", "rattler-build", "anaconda-client"] }
+[environments.dev]
+features = ["default"]
+solve-group = "dev"
 
-[activation]
-scripts = ["scripts/setup-env.nu"]
+[environments.test]
+features = ["default"]
+solve-group = "test"
+
+[environments.release]
+features = ["default"]
+solve-group = "release"
+
+[environments.packaging]
+features = ["default"]
+solve-group = "packaging"
+
+[target.linux-64.activation]
+scripts = ["scripts/setup-env.sh"]
+
+[target.osx-64.activation]
+scripts = ["scripts/setup-env.sh"]
+
+[target.osx-arm64.activation]
+scripts = ["scripts/setup-env.sh"]
+
+[target.win-64.activation]
+scripts = ["scripts/setup-env.bat"]
 
 [target.linux-64.tasks]
 # Linux-specific tasks
@@ -254,12 +388,14 @@ test-system-deps = "echo 'Windows system dependencies check'"
 
 [pypi-dependencies]
 # Python dependencies if needed for tooling
-pre-commit = "*"
+pre-commit = ">=3.0,<4"
 
-# === Nushell Task Groups ===
-[task-groups]
 # Group related tasks for easier execution
-build-all = ["build", "build-release", "conda-build-all-nu"]
-test-comprehensive = ["test-all-nu", "test-lint-nu", "test-performance"]
-conda-workflow = ["conda-build-all-nu", "conda-test-nu", "conda-verify-nu"]
-release-workflow = ["prepare-release-nu", "conda-publish-nu"]
+[tasks.build-all]
+depends-on = ["build", "build-release", "conda-build-all"]
+[tasks.test-comprehensive]
+depends-on = ["test-all-nu", "test-lint-nu", "test-performance"]
+[tasks.conda-workflow]
+depends-on = ["conda-build-all-nu", "conda-test-nu", "conda-verify-nu"]
+[tasks.release-workflow]
+depends-on = ["prepare-release-nu", "conda-publish-nu"]

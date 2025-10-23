@@ -1,17 +1,42 @@
 #!/usr/bin/env nu
-# Cross-platform build script for meso-forge-mirror conda packaging
-# This script handles building the Rust binary for different target platforms
+# Build script with proper conda environment setup for AWS SDK compatibility
+# Supports multiple target platforms with interactive selection
 
-# Default values
-let default_config = {
-    target_platform: "",
-    build_type: "release",
-    output_dir: "target",
-    verbose: false,
-    clean_build: false
+# Available target platforms
+const PLATFORMS = {
+    "linux-64": {
+        rust_target: "x86_64-unknown-linux-gnu",
+        description: "Linux x86_64",
+        binary_extension: ""
+    },
+    "osx-64": {
+        rust_target: "x86_64-apple-darwin",
+        description: "macOS Intel x86_64",
+        binary_extension: ""
+    },
+    "osx-arm64": {
+        rust_target: "aarch64-apple-darwin",
+        description: "macOS Apple Silicon ARM64",
+        binary_extension: ""
+    },
+    "win-64": {
+        rust_target: "x86_64-pc-windows-gnu",
+        description: "Windows x86_64",
+        binary_extension: ".exe"
+    },
+    "current": {
+        rust_target: "",
+        description: "Current platform (native build)",
+        binary_extension: ""
+    },
+    "debug": {
+        rust_target: "",
+        description: "Debug build for current platform",
+        binary_extension: ""
+    }
 }
 
-# Color codes for output (using nushell's built-in color support)
+# Logging functions with colors
 def log_info [message: string] {
     print $"(ansi blue)[INFO](ansi reset) ($message)"
 }
@@ -28,288 +53,276 @@ def log_error [message: string] {
     print $"(ansi red)[ERROR](ansi reset) ($message)"
 }
 
-# Help function
-def show_help [] {
-    print "Usage: nu build.nu [OPTIONS]
-
-Cross-platform build script for meso-forge-mirror
-
-OPTIONS:
-    --target PLATFORM    Target platform (linux-64, osx-64, osx-arm64, win-64, all)
-    --debug              Build in debug mode (default: release)
-    --output DIR         Output directory (default: target)
-    --verbose            Verbose output
-    --clean              Clean previous builds
-    --help               Show this help message
-
-PLATFORMS:
-    linux-64             x86_64-unknown-linux-gnu
-    osx-64               x86_64-apple-darwin
-    osx-arm64            aarch64-apple-darwin
-    win-64               x86_64-pc-windows-gnu
-    all                  Build for all platforms
-
-EXAMPLES:
-    nu build.nu --target linux-64
-    nu build.nu --target osx-arm64 --debug
-    nu build.nu --target win-64 --output ./dist
-    nu build.nu --target all --verbose"
+# Check if we're in a conda environment
+def check_conda_environment [] {
+    let conda_prefix = ($env.CONDA_PREFIX? | default "")
+    if ($conda_prefix | is-empty) {
+        log_error "CONDA_PREFIX not set. Please run this script from within a pixi/conda environment."
+        exit 1
+    }
+    log_info $"Building meso-forge-mirror with conda environment: ($conda_prefix)"
 }
 
-# Map conda platforms to Rust targets
-def get_rust_target [platform: string]: string -> string {
-    match $platform {
-        "linux-64" => "x86_64-unknown-linux-gnu",
-        "osx-64" => "x86_64-apple-darwin",
-        "osx-arm64" => "aarch64-apple-darwin",
-        "win-64" => "x86_64-pc-windows-gnu",
-        _ => {
-            log_error $"Unsupported target platform: ($platform)"
+# Set up conda environment variables
+def setup_conda_environment [] {
+    let conda_prefix = ($env.CONDA_PREFIX? | default "")
+
+    if ($conda_prefix | is-empty) {
+        log_error "CONDA_PREFIX not found in environment"
+        return
+    }
+
+    # Set AWS SDK compatibility flags
+    $env.AWS_LC_SYS_NO_ASM = "1"
+    $env.AWS_LC_SYS_CMAKE_BUILDER = "0"
+    $env.OPENSSL_NO_VENDOR = "1"
+
+    # Set OpenSSL paths for conda environment
+    $env.OPENSSL_DIR = $conda_prefix
+    $env.OPENSSL_LIB_DIR = $"($conda_prefix)/lib"
+    $env.OPENSSL_INCLUDE_DIR = $"($conda_prefix)/include"
+
+    # Update PKG_CONFIG_PATH to include conda libraries
+    $env.PKG_CONFIG_PATH = $"($conda_prefix)/lib/pkgconfig:($env.PKG_CONFIG_PATH? | default '')"
+
+    # Set Rust flags for proper linking
+    $env.RUSTFLAGS = $"-L ($conda_prefix)/lib -C link-arg=-Wl,-rpath,($conda_prefix)/lib"
+
+    # Set compiler to use conda's gcc if available
+    let gcc_path = $"($conda_prefix)/bin/gcc"
+    let gxx_path = $"($conda_prefix)/bin/g++"
+
+    if ($gcc_path | path exists) {
+        $env.CC = $gcc_path
+        $env.CXX = $gxx_path
+        log_info $"Using conda GCC: ($gcc_path)"
+    }
+}
+
+# Verify OpenSSL is available
+def verify_openssl [] {
+    let openssl_lib = ($env.OPENSSL_LIB_DIR? | default "")
+
+    if ($openssl_lib | is-empty) {
+        log_warning "OPENSSL_LIB_DIR not set"
+        return
+    }
+
+    let ssl_so = $"($openssl_lib)/libssl.so"
+    let ssl_dylib = $"($openssl_lib)/libssl.dylib"
+
+    if not (($ssl_so | path exists) or ($ssl_dylib | path exists)) {
+        log_warning $"OpenSSL libraries not found in ($openssl_lib)"
+        log_info "Attempting to use system OpenSSL..."
+
+        try {
+            ^pkg-config --exists openssl
+        } catch {
+            log_error "OpenSSL not found. Please ensure OpenSSL is installed in the conda environment."
             exit 1
         }
     }
 }
 
-# Get binary extension for platform
-def get_binary_extension [platform: string]: string -> string {
-    match $platform {
-        "win-64" => ".exe",
-        _ => ""
+# Display build configuration
+def display_build_config [] {
+    log_info "Build configuration:"
+    print $"  AWS_LC_SYS_NO_ASM: ($env.AWS_LC_SYS_NO_ASM? | default 'not set')"
+    print $"  OPENSSL_DIR: ($env.OPENSSL_DIR? | default 'not set')"
+    print $"  OPENSSL_LIB_DIR: ($env.OPENSSL_LIB_DIR? | default 'not set')"
+    print $"  CC: ($env.CC? | default 'system default')"
+    print $"  RUSTFLAGS: ($env.RUSTFLAGS? | default 'not set')"
+}
+
+# Show available platforms
+def show_platforms [] {
+    print "Available target platforms:"
+    for platform in ($PLATFORMS | columns | sort) {
+        let info = ($PLATFORMS | get $platform)
+        print $"  ($platform) - ($info.description)"
     }
 }
 
-# Install Rust target if not available
-def install_target [rust_target: string] {
-    log_info $"Checking if target ($rust_target) is installed..."
+# Prompt user to select a platform
+def prompt_platform_selection []: nothing -> string {
+    print ""
+    show_platforms
+    print ""
 
-    let installed_targets = (rustup target list --installed | lines)
+    mut selection = ""
+    while $selection not-in ($PLATFORMS | columns) {
+        $selection = (input "Please select a target platform: ")
+
+        if $selection not-in ($PLATFORMS | columns) {
+            log_error $"Invalid selection: ($selection)"
+            print "Please choose from the available options."
+        }
+    }
+    $selection
+}
+
+# Install Rust target if needed
+def install_rust_target [rust_target: string] {
+    if ($rust_target | is-empty) {
+        return
+    }
+
+    log_info $"Checking if Rust target ($rust_target) is installed..."
+
+    let installed_targets = (^rustup target list --installed | lines)
 
     if not ($rust_target in $installed_targets) {
-        log_info $"Installing target: ($rust_target)"
-        rustup target add $rust_target
+        log_info $"Installing Rust target: ($rust_target)"
+        ^rustup target add $rust_target
+        log_success $"Installed target: ($rust_target)"
     } else {
         log_success $"Target ($rust_target) is already installed"
     }
 }
 
-# Build for specific target
-def build_target [platform: string, rust_target: string, extension: string, config: record] {
-    log_info $"Building for platform: ($platform) (target: ($rust_target))"
+# Build the project
+def build_project [platform: string] {
+    let platform_info = ($PLATFORMS | get $platform)
+    let rust_target = $platform_info.rust_target
+    let description = $platform_info.description
+    let extension = $platform_info.binary_extension
 
-    # Install target if needed
-    install_target $rust_target
+    log_info $"Building for platform: ($platform) - ($description)"
+
+    # Install Rust target if needed
+    if not ($rust_target | is-empty) {
+        install_rust_target $rust_target
+    }
 
     # Build cargo command
-    mut cargo_cmd = ["cargo", "build", "--target", $rust_target]
-
-    if $config.build_type == "release" {
-        $cargo_cmd = ($cargo_cmd | append "--release")
-    }
-
-    if $config.verbose {
-        $cargo_cmd = ($cargo_cmd | append "--verbose")
-    }
-
-    # Add locked flag to use exact dependencies from Cargo.lock
-    $cargo_cmd = ($cargo_cmd | append "--locked")
-
+    let cargo_cmd = ["cargo", "build"]
+        | if $platform == "debug" {
+            log_info "Building in debug mode..."
+            $in
+        } else {
+            log_info "Building in release mode..."
+            $in | append "--release"
+        }
+        | if not ($rust_target | is-empty) {
+            log_info $"Cross-compiling for target: ($rust_target)"
+            $in | append ["--target", $rust_target]
+        } else {
+            $in
+        }
+        | append "--locked"
     # Execute build
     log_info $"Executing: ($cargo_cmd | str join ' ')"
 
-    try {
-        run-external ($cargo_cmd | first) ...($cargo_cmd | skip 1)
-    } catch {
-        log_error $"Build failed for ($platform)"
-        return false
+    let cargo_result = (run-external ...$cargo_cmd | complete)
+    if ($cargo_result.exit_code != 0) {
+        log_error $"Build failed for platform: ($platform)"
+    }
+    log_success "Build completed successfully!"
+
+    # Determine binary path
+    let binary_name = $"meso-forge-mirror($extension)"
+    let binary_path = if $platform == "debug" {
+        $"target/debug/($binary_name)"
+    } else if ($rust_target | is-empty) {
+        $"target/release/($binary_name)"
+    } else {
+        $"target/($rust_target)/release/($binary_name)"
     }
 
-    # Verify binary was created
-    let binary_path = $"target/($rust_target)/($config.build_type)/meso-forge-mirror($extension)"
-
+    # Verify and report binary
     if ($binary_path | path exists) {
-        log_success $"Binary built successfully: ($binary_path)"
+        log_success $"Binary available at: ($binary_path)"
+        let size_info = (ls $binary_path | get 0 | get size)
+        print $"Size: ($size_info)"
 
-        # Show binary info
-        ls $binary_path | select name size modified
-
-        # Test that binary works (only for compatible platforms)
-        if ($platform == "linux-64") or ($nu.os-info.name == "macos" and ($platform == "osx-64" or $platform == "osx-arm64")) {
+        # Test binary if it's for current platform
+        if ($platform == "current") or ($platform == "debug") or ($nu.os-info.name == "linux" and $platform == "linux-64") {
             log_info "Testing binary..."
             try {
-                run-external $binary_path "--version" | ignore
+                ^($binary_path) --version | ignore
                 log_success "Binary test passed"
             } catch {
                 log_warning "Binary test failed (may be due to cross-compilation)"
             }
         }
-
-        return true
     } else {
-        log_error $"Binary not found at expected path: ($binary_path)"
-        return false
+        log_warning $"Binary not found at expected location: ($binary_path)"
     }
 }
 
-# Build all targets
-def build_all_targets [config: record]: record -> bool {
-    log_info "Building for all supported platforms..."
+# Show help message
+def show_help [] {
+    print "Usage: nu build.nu [TARGET_PLATFORM]
 
-    let platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    mut failed_builds = []
+Build script with proper conda environment setup for AWS SDK compatibility.
 
-    for platform in $platforms {
-        let rust_target = (get_rust_target $platform)
-        let extension = (get_binary_extension $platform)
+ARGUMENTS:
+    TARGET_PLATFORM    Target platform to build for (optional)
 
-        log_info $"Starting build for ($platform)..."
+If no target platform is provided, you will be prompted to select one.
 
-        if (build_target $platform $rust_target $extension $config) {
-            log_success $"Completed build for ($platform)"
-        } else {
-            log_error $"Failed to build for ($platform)"
-            $failed_builds = ($failed_builds | append $platform)
-        }
-        print ""
-    }
+EXAMPLES:
+    nu build.nu linux-64      # Build for Linux x86_64
+    nu build.nu osx-arm64     # Build for macOS Apple Silicon
+    nu build.nu debug         # Debug build for current platform
+    nu build.nu current       # Release build for current platform
+    nu build.nu               # Interactive platform selection
 
-    # Report results
-    if ($failed_builds | is-empty) {
-        log_success "All builds completed successfully!"
-        return true
-    } else {
-        log_error $"Failed builds: ($failed_builds | str join ', ')"
-        return false
+SUPPORTED PLATFORMS:"
+
+    for platform in ($PLATFORMS | columns | sort) {
+        let info = ($PLATFORMS | get $platform)
+        print $"    ($platform) - ($info.description)"
     }
 }
 
-# Build for current platform
-def build_current_platform [config: record]: record -> bool {
-    log_info "No target specified, building for current platform..."
-
-    mut cargo_cmd = ["cargo", "build"]
-
-    if $config.build_type == "release" {
-        $cargo_cmd = ($cargo_cmd | append "--release")
-    }
-
-    if $config.verbose {
-        $cargo_cmd = ($cargo_cmd | append "--verbose")
-    }
-
-    $cargo_cmd = ($cargo_cmd | append "--locked")
-
-    log_info $"Executing: ($cargo_cmd | str join ' ')"
-
-    try {
-        run-external ($cargo_cmd | first) ...($cargo_cmd | skip 1)
-    } catch {
-        log_error "Build failed"
-        return false
-    }
-
-    # Find and report the binary
-    let binary_name = if $nu.os-info.name == "windows" { "meso-forge-mirror.exe" } else { "meso-forge-mirror" }
-    let binary_path = $"target/($config.build_type)/($binary_name)"
-
-    if ($binary_path | path exists) {
-        log_success $"Binary built: ($binary_path)"
-        ls $binary_path | select name size modified
-        return true
-    } else {
-        log_error $"Binary not found at expected path: ($binary_path)"
-        return false
-    }
-}
-
-# Main function
+# Entry point - handle command line arguments
 def main [...args] {
-    # Parse arguments
-    mut config = $default_config
-    mut i = 0
+    let help_requested = ($args | any {|arg| $arg == "--help" or $arg == "-h"})
 
-    while $i < ($args | length) {
-        let arg = ($args | get $i)
-        match $arg {
-            "--target" | "-t" => {
-                if ($i + 1) < ($args | length) {
-                    $config.target_platform = ($args | get ($i + 1))
-                    $i = $i + 2
-                } else {
-                    log_error "Missing value for --target"
-                    exit 1
-                }
-            },
-            "--debug" | "-d" => {
-                $config.build_type = "debug"
-                $i = $i + 1
-            },
-            "--output" | "-o" => {
-                if ($i + 1) < ($args | length) {
-                    $config.output_dir = ($args | get ($i + 1))
-                    $i = $i + 2
-                } else {
-                    log_error "Missing value for --output"
-                    exit 1
-                }
-            },
-            "--verbose" | "-v" => {
-                $config.verbose = true
-                $i = $i + 1
-            },
-            "--clean" => {
-                $config.clean_build = true
-                $i = $i + 1
-            },
-            "--help" | "-h" => {
-                show_help
-                exit 0
-            },
-            _ => {
-                log_error $"Unknown option: ($arg)"
-                show_help
-                exit 1
-            }
-        }
+    if $help_requested {
+        show_help
+        return
     }
 
-    log_info "Starting meso-forge-mirror build process..."
-    log_info $"Build type: ($config.build_type)"
-    log_info $"Output directory: ($config.output_dir)"
-
-    # Ensure we're in the right directory
+    # Ensure we're in the project root
     if not ("Cargo.toml" | path exists) {
         log_error "Cargo.toml not found. Please run this script from the project root."
         exit 1
     }
 
-    # Clean previous builds if requested
-    if $config.clean_build {
-        log_info "Cleaning previous builds..."
-        cargo clean
+    # Check conda environment
+    check_conda_environment
+
+    # Set up conda environment variables
+    setup_conda_environment
+
+    # Verify OpenSSL availability
+    verify_openssl
+
+    # Display build configuration
+    display_build_config
+
+    # Determine target platform
+    let platform = if ($args | is-empty) {
+        prompt_platform_selection
+    } else {
+        let target_platform = ($args | get 0)
+        if ($target_platform in ($PLATFORMS | columns)) {
+            $target_platform
+        } else {
+            log_error $"Invalid target platform: ($target_platform)"
+            show_platforms
+            exit 1
+        }
     }
 
-    # Build based on target selection
-    let success = if ($config.target_platform | is-empty) {
-        # No target specified, build for current platform
-        build_current_platform $config
-    } else if $config.target_platform == "all" {
-        # Build for all targets
-        build_all_targets $config
-    } else {
-        # Build for specific target
-        let rust_target = (get_rust_target $config.target_platform)
-        let extension = (get_binary_extension $config.target_platform)
-        build_target $config.target_platform $rust_target $extension $config
-    }
+    print ""
+    log_info $"Selected platform: ($platform)"
+    print ""
 
-    if $success {
-        log_success "Build process completed!"
-        exit 0
-    } else {
-        log_error "Build process failed!"
-        exit 1
-    }
+    # Build the project
+    build_project $platform
+
+    log_success "Build process completed successfully!"
 }
-
-# Run main function with all arguments
-# main ...$args

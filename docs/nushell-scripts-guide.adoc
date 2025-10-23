@@ -1,0 +1,528 @@
+= Nushell Scripts Guide for Meso Forge Mirror
+:toc: left
+:toclevels: 3
+:sectanchors:
+:sectlinks:
+:sectnums:
+:source-highlighter: highlight.js
+:icons: font
+:experimental:
+
+This guide provides detailed documentation for the Nushell-based scripts in the `meso-forge-mirror` project. These scripts offer enhanced functionality, better cross-platform support, and improved error handling compared to traditional shell scripts.
+
+== Overview
+
+The project includes three main Nushell scripts located in the `scripts/` directory:
+
+* `build.nu` - Advanced build script with interactive platform selection
+* `conda-ops.nu` - Comprehensive conda package operations
+* `test.nu` - Advanced testing and validation capabilities
+
+== Prerequisites
+
+=== Installing Nushell
+
+Before using these scripts, ensure Nushell is installed:
+
+[source,bash]
+----
+# Install via cargo
+cargo install nu
+
+# Or via conda/mamba
+conda install -c conda-forge nushell
+
+# Or via package managers
+brew install nushell           # macOS
+sudo apt install nushell       # Ubuntu/Debian
+winget install nushell         # Windows
+----
+
+=== Verify Installation
+
+[source,bash]
+----
+nu --version
+----
+
+== Build Script (`scripts/build.nu`)
+
+The build script provides comprehensive building capabilities with proper conda environment setup and cross-platform support.
+
+=== Basic Usage
+
+[source,bash]
+----
+# Interactive platform selection
+nu scripts/build.nu
+
+# Build for specific platform
+nu scripts/build.nu linux-64
+
+# Show help
+nu scripts/build.nu --help
+----
+
+=== Supported Platforms
+
+[cols="1,2,3"]
+|===
+|Platform |Description |Rust Target
+
+|`linux-64`
+|Linux x86_64
+|`x86_64-unknown-linux-gnu`
+
+|`osx-64`
+|macOS Intel x86_64
+|`x86_64-apple-darwin`
+
+|`osx-arm64`
+|macOS Apple Silicon ARM64
+|`aarch64-apple-darwin`
+
+|`win-64`
+|Windows x86_64
+|`x86_64-pc-windows-gnu`
+
+|`current`
+|Current platform (native)
+|Auto-detected
+
+|`debug`
+|Debug build for current platform
+|Auto-detected
+|===
+
+=== Features
+
+==== Environment Setup
+* Automatic conda environment detection
+* AWS SDK compatibility configuration
+* OpenSSL path configuration
+* Proper linking flags for cross-compilation
+
+==== Interactive Selection
+* User-friendly platform selection menu
+* Input validation and error handling
+* Clear progress reporting
+
+==== Build Verification
+* Binary existence checking
+* Size reporting
+* Basic functionality testing (when applicable)
+
+=== Advanced Usage
+
+[source,bash]
+----
+# Build with verbose output
+RUST_LOG=debug nu scripts/build.nu linux-64
+
+# Build multiple platforms in sequence
+for platform in [linux-64 osx-64 win-64] {
+    nu scripts/build.nu $platform
+}
+----
+
+=== Environment Variables
+
+The script respects and sets several environment variables:
+
+[cols="1,3"]
+|===
+|Variable |Purpose
+
+|`CONDA_PREFIX`
+|Conda environment path (required)
+
+|`AWS_LC_SYS_NO_ASM`
+|AWS SDK compatibility
+
+|`AWS_LC_SYS_CMAKE_BUILDER`
+|AWS SDK build configuration
+
+|`OPENSSL_DIR`
+|OpenSSL installation directory
+
+|`OPENSSL_LIB_DIR`
+|OpenSSL library directory
+
+|`OPENSSL_INCLUDE_DIR`
+|OpenSSL header directory
+
+|`PKG_CONFIG_PATH`
+|Package configuration paths
+
+|`RUSTFLAGS`
+|Rust compiler flags for linking
+|===
+
+== Conda Operations Script (`scripts/conda-ops.nu`)
+
+This script provides comprehensive conda package building, testing, and publishing operations.
+
+=== Basic Commands
+
+[source,bash]
+----
+# Show help
+nu scripts/conda-ops.nu help
+
+# Build packages for all platforms
+nu scripts/conda-ops.nu build
+
+# Build for specific platforms
+nu scripts/conda-ops.nu build linux-64 osx-64
+
+# Build with rattler-build
+nu scripts/conda-ops.nu build-rattler
+
+# Test package installation
+nu scripts/conda-ops.nu test
+
+# Verify package integrity
+nu scripts/conda-ops.nu verify package.conda
+
+# Publish to channel
+nu scripts/conda-ops.nu publish meso-forge
+
+# Publish to prefix.dev
+nu scripts/conda-ops.nu publish-prefix
+----
+
+=== Build Operations
+
+==== Traditional Conda-Build
+
+[source,bash]
+----
+# Build for current platform
+nu scripts/conda-ops.nu build
+
+# Build for all supported platforms
+nu scripts/conda-ops.nu build linux-64 osx-64 osx-arm64 win-64
+
+# Build with custom output directory
+nu scripts/conda-ops.nu build --output-dir custom-packages
+----
+
+==== Rattler-Build
+
+[source,bash]
+----
+# Build with rattler-build (modern, faster)
+nu scripts/conda-ops.nu build-rattler
+
+# Build for specific platforms with rattler-build
+nu scripts/conda-ops.nu build-rattler linux-64 osx-arm64
+----
+
+=== Testing and Verification
+
+[source,bash]
+----
+# Test package installation in clean environment
+nu scripts/conda-ops.nu test linux-64
+
+# Verify package integrity and metadata
+nu scripts/conda-ops.nu verify dist/linux-64/meso-forge-mirror-*.conda
+
+# Run comprehensive package validation
+nu scripts/conda-ops.nu validate-all
+----
+
+=== Publishing Operations
+
+[source,bash]
+----
+# Upload to anaconda.org channel
+nu scripts/conda-ops.nu publish my-channel
+
+# Upload to prefix.dev
+nu scripts/conda-ops.nu publish-prefix
+
+# Upload with authentication token
+ANACONDA_TOKEN=xyz nu scripts/conda-ops.nu publish my-channel
+----
+
+=== Configuration
+
+The script uses a configuration record that can be customized:
+
+[source,nushell]
+----
+const config = {
+    build_type: "release",
+    platforms: ["linux-64", "osx-64", "osx-arm64", "win-64"],
+    output_dir: "conda-packages",
+    rattler_output_dir: "rattler-packages",
+    recipe_dir: "conda-recipe",
+    test_env_prefix: "test-meso-forge",
+    channel: "meso-forge",
+    verbose: false
+}
+----
+
+== Testing Script (`scripts/test.nu`)
+
+The testing script provides comprehensive testing capabilities including unit tests, integration tests, and package validation.
+
+=== Test Categories
+
+[source,bash]
+----
+# Unit tests
+nu scripts/test.nu unit
+
+# Integration tests
+nu scripts/test.nu integration
+
+# All cargo tests (unit + doc + bench)
+nu scripts/test.nu cargo
+
+# Linting and formatting checks
+nu scripts/test.nu lint
+
+# Local mirroring functionality
+nu scripts/test.nu local-mirror
+
+# Performance testing
+nu scripts/test.nu performance
+
+# Package validation
+nu scripts/test.nu package-validation
+
+# Configuration testing
+nu scripts/test.nu config
+
+# Complete test suite
+nu scripts/test.nu all
+----
+
+=== Local Mirror Testing
+
+[source,bash]
+----
+# Basic local mirror test
+nu scripts/test.nu local-mirror
+
+# Test with specific packages
+nu scripts/test.nu local-mirror --packages pip,numpy,scipy
+
+# Test with custom configuration
+nu scripts/test.nu local-mirror --config examples/local-config.toml
+----
+
+=== Performance Testing
+
+[source,bash]
+----
+# Basic performance test
+nu scripts/test.nu performance
+
+# Performance test with profiling
+nu scripts/test.nu performance --profile
+
+# Stress test with large package set
+nu scripts/test.nu performance --stress
+----
+
+=== Integration Testing
+
+[source,bash]
+----
+# Full integration test suite
+nu scripts/test.nu integration
+
+# Test specific backend
+nu scripts/test.nu integration --backend s3
+nu scripts/test.nu integration --backend local
+nu scripts/test.nu integration --backend prefix-dev
+----
+
+== Script Features and Benefits
+
+=== Cross-Platform Compatibility
+
+All scripts work consistently across:
+* Linux (x86_64, ARM64)
+* macOS (Intel and Apple Silicon)
+* Windows (with proper environment setup)
+
+=== Enhanced Error Handling
+
+* Structured error messages with context
+* Colored output for better visibility
+* Graceful failure with helpful suggestions
+* Comprehensive logging at different levels
+
+=== Interactive Features
+
+* User-friendly prompts and menus
+* Input validation and confirmation
+* Progress indicators for long operations
+* Clear status reporting
+
+=== Structured Data Handling
+
+* Type-safe operations with Nushell's type system
+* Proper handling of JSON, TOML, and other formats
+* Better parsing of command outputs
+* Structured configuration management
+
+== Best Practices
+
+=== Running Scripts
+
+. Always run from the project root directory
+. Ensure you're in the proper conda/pixi environment
+. Check prerequisites before running complex operations
+. Use the `--help` flag to understand options
+
+=== Environment Setup
+
+[source,bash]
+----
+# Recommended workflow
+cd meso-forge-mirror
+pixi shell
+nu scripts/build.nu --help
+----
+
+=== Error Handling
+
+The scripts provide detailed error messages. Common issues:
+
+. **Conda environment not detected**: Ensure `CONDA_PREFIX` is set
+. **Missing dependencies**: Install required tools (conda-build, rattler-build)
+. **Permission errors**: Check file permissions and authentication tokens
+. **Platform not supported**: Verify the target platform is available
+
+=== Debugging
+
+Enable verbose output for debugging:
+
+[source,bash]
+----
+# Debug mode
+RUST_LOG=debug nu scripts/build.nu
+
+# Trace mode (very verbose)
+RUST_LOG=trace nu scripts/test.nu integration
+----
+
+== Integration with Pixi Tasks
+
+The Nushell scripts are integrated with pixi tasks for convenience:
+
+[source,bash]
+----
+# Using pixi tasks (recommended)
+pixi run build-platform        # Uses build.nu
+pixi run conda-build-nu         # Uses conda-ops.nu build
+pixi run test-integration-nu    # Uses test.nu integration
+
+# Direct script usage
+nu scripts/build.nu
+nu scripts/conda-ops.nu build
+nu scripts/test.nu integration
+----
+
+== Extending the Scripts
+
+The scripts are designed to be modular and extensible:
+
+=== Adding New Platforms
+
+Edit the `PLATFORMS` constant in `build.nu`:
+
+[source,nushell]
+----
+const PLATFORMS = {
+    # ... existing platforms ...
+    "new-platform": {
+        rust_target: "target-triple",
+        description: "Platform Description",
+        binary_extension: ""
+    }
+}
+----
+
+=== Adding New Test Categories
+
+Add new test functions in `test.nu`:
+
+[source,nushell]
+----
+def test_new_category [] {
+    log_test "Running new test category"
+    # Test implementation
+}
+----
+
+=== Custom Configuration
+
+Most scripts accept configuration overrides via command-line arguments or environment variables.
+
+== Troubleshooting
+
+=== Common Issues
+
+. **Nushell not found**: Install Nushell or ensure it's in PATH
+. **Permission denied**: Check script execute permissions
+. **Missing dependencies**: Ensure all required tools are installed
+. **Environment issues**: Verify conda/pixi environment is properly activated
+
+=== Getting Help
+
+[source,bash]
+----
+# Script-specific help
+nu scripts/build.nu --help
+nu scripts/conda-ops.nu help
+nu scripts/test.nu help
+
+# List available commands
+nu scripts/conda-ops.nu
+nu scripts/test.nu
+----
+
+=== Reporting Issues
+
+When reporting issues, include:
+* Nushell version (`nu --version`)
+* Operating system and architecture
+* Full error output
+* Steps to reproduce
+
+== Migration from Shell Scripts
+
+If migrating from traditional shell scripts:
+
+=== Advantages of Nushell Scripts
+
+* Better error messages and handling
+* Cross-platform compatibility
+* Type safety and structured data
+* Interactive features
+* Consistent behavior across environments
+
+=== Migration Steps
+
+. Install Nushell
+. Test scripts in development environment
+. Update CI/CD pipelines if needed
+. Train team members on new syntax
+
+=== Backward Compatibility
+
+The original shell scripts are maintained for compatibility:
+* `setup-env.sh` / `setup-env.bat` - Environment setup
+* Other legacy scripts as needed
+
+== Conclusion
+
+The Nushell scripts provide a modern, robust foundation for building, testing, and packaging the meso-forge-mirror project. They offer significant improvements in usability, reliability, and maintainability while supporting the full development workflow from initial build to package publication.
+
+For questions or contributions to the scripts, please refer to the project's contribution guidelines and open issues on the project repository.

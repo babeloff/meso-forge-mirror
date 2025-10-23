@@ -2,11 +2,9 @@
 # Environment setup script for meso-forge-mirror development
 # This script is automatically sourced by pixi when activating the environment
 
-set -e
-
 echo "Setting up meso-forge-mirror development environment..."
 
-# Ensure cargo is available
+# Check if cargo is available
 if ! command -v cargo &> /dev/null; then
     echo "Warning: cargo not found in PATH"
 fi
@@ -40,12 +38,15 @@ else
     echo "⚠ Warning: Cargo.toml not found in current directory"
 fi
 
-# Check for required system dependencies
+# Function to check dependency
 check_dependency() {
-    if command -v "$1" &> /dev/null; then
-        echo "✓ $1 available"
+    local command="$1"
+    local purpose="$2"
+
+    if command -v "$command" &> /dev/null; then
+        echo "✓ $command available"
     else
-        echo "⚠ $1 not found (required for: $2)"
+        echo "⚠ $command not found (required for: $purpose)"
     fi
 }
 
@@ -56,20 +57,25 @@ check_dependency "curl" "HTTP requests testing"
 
 # Rust toolchain verification
 if command -v cargo &> /dev/null; then
-    RUST_VERSION=$(cargo --version | cut -d' ' -f2)
-    echo "✓ Rust toolchain: $RUST_VERSION"
+    rust_version=$(cargo --version | awk '{print $2}')
+    echo "✓ Rust toolchain: $rust_version"
 
     # Check for required targets for cross-compilation
-    if cargo target list | grep -q "x86_64-unknown-linux-gnu"; then
-        echo "✓ Linux target available"
-    fi
+    if command -v rustup &> /dev/null; then
+        targets=$(rustup target list --installed)
 
-    if cargo target list | grep -q "x86_64-apple-darwin"; then
-        echo "✓ macOS target available"
+        if echo "$targets" | grep -q "x86_64-unknown-linux-gnu"; then
+            echo "✓ Linux target available"
+        fi
+
+        if echo "$targets" | grep -q "x86_64-apple-darwin"; then
+            echo "✓ macOS target available"
+        fi
     fi
 fi
 
 # Setup completion
+echo ""
 echo "Environment setup complete!"
 echo ""
 echo "Available pixi tasks:"

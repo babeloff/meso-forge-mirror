@@ -1,0 +1,1 @@
+{"build": "hd590300_5", "build_number": 5, "depends": ["libgcc-ng >=12", "libzlib 1.2.13 hd590300_5"], "license": "Zlib", "license_family": "Other", "name": "zlib", "subdir": "linux-64", "timestamp": 1686575231103, "version": "1.2.13", "size": 92825, "md5": "68c34ec6149623be41a1933ab996a209", "sha256": "9887a04d7e7cb14bd2b52fa01858f05a6d7f002c890f618d9fcd864adbfecb1b"}

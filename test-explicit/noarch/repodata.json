@@ -1,0 +1,20 @@
+{
+  "info": {
+    "subdir": "noarch"
+  },
+  "packages": {
+    "wheel-0.42.0-pyhd8ed1ab_0.conda": {
+      "build": "pyhd8ed1ab_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "",
+      "md5": "1cdea58981c5cbc17b51973bcaddcea7",
+      "sha256": "80be0ccc815ce22f80c141013302839b0ed938a2edb50b846cf48d8a8c1cfa01",
+      "size": 57553,
+      "subdir": "noarch",
+      "name": "wheel",
+      "version": "0.42.0",
+      "timestamp": "2025-10-22T22:02:10.864530238Z"
+    }
+  }
+}

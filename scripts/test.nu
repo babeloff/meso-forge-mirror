@@ -105,37 +105,31 @@ def cleanup_test_env [force: bool = false] {
 def run_unit_tests [verbose: bool = false]: bool -> bool {
     log_test "Rust unit tests"
 
-    mut cargo_cmd = ["cargo", "test", "--lib"]
+    let cargo_args = [
+        "cargo" "test" "--lib"
+        (if $verbose { "--verbose" } else { $nothing }
+    ]
 
-    if $verbose {
-        $cargo_cmd = ($cargo_cmd | append "--verbose")
-    }
-
-    try {
-        run-external ...$cargo_cmd
-        log_success "Unit tests passed"
-        return true
-    } catch {
+    let cargo_result = (run-external ...$cargo_args | complete}
+    if ($cargo_result.exit_code != 0) {
         log_error "Unit tests failed"
-        return false
+        return true
     }
+    log_success "Unit tests passed"
+    return false
 }
 
 # Run integration tests
 def run_integration_tests [verbose: bool = false]: bool -> bool {
     log_test "Integration tests"
 
-    mut cargo_cmd = ["cargo", "test", "--test", "*"]
+    let cargo_args = [
+        "cargo" "test" "--test" "*"
+        (if $verbose { "--verbose" } else { $nothing }
+    ]
 
-    if $verbose {
-        $cargo_cmd = ($cargo_cmd | append "--verbose")
-    }
-
-    try {
-        run-external ...$cargo_cmd
-        log_success "Integration tests passed"
-        return true
-    } catch {
+    let cargo_result = (run-external ...$cargo_args | complete)
+    if ($cargo_result.exit_code != 0) {
         log_error "Integration tests failed"
         return false
     }
@@ -151,12 +145,9 @@ def run_cargo_tests [verbose: bool = false]: bool -> record {
     $results.unit = (run_unit_tests $verbose)
 
     # Documentation tests
-    try {
-        if $verbose { log_info "Running documentation tests..." }
-        cargo test --doc
-        $results.doc = true
-        log_success "Documentation tests passed"
-    } catch {
+    let cargo_args = ["cargo" "test" "--doc"]
+    let cargo_result = (run-external ...cargo_args | complete)
+    if ($cargo_result.exit_code != 0) {
         log_error "Documentation tests failed"
         $results.doc = false
     }
@@ -174,23 +165,18 @@ def run_lint_checks [verbose: bool = false]: bool -> record {
     mut results = { clippy: false, fmt: false, audit: false }
 
     # Clippy
-    try {
-        if $verbose { log_info "Running clippy..." }
-        cargo clippy -- -D warnings
-        $results.clippy = true
-        log_success "Clippy checks passed"
-    } catch {
+    if $verbose { log_info "Running clippy..." }
+    let cargo_args = ["cargo" "clippy" "--" "-D" "warnings"]
+    let cargo_result = (run-external ...$cargo_args | complete)
+    if ($cargo_result.exit_code != 0) {
         log_error "Clippy checks failed"
         $results.clippy = false
     }
 
     # Formatting
-    try {
-        if $verbose { log_info "Checking code formatting..." }
-        cargo fmt -- --check
-        $results.fmt = true
-        log_success "Code formatting is correct"
-    } catch {
+    let cargo_args = ["cargo" "fmt" "--" "--check"]
+    let cargo_result = (run-external ...$cargo_args | complete)
+    if ($cargo_result.exit_code != 0) {
         log_error "Code formatting issues found"
         $results.fmt = false
     }
@@ -224,37 +210,34 @@ def test_local_mirror [verbose: bool = false] -> bool {
     # Test with a small package
     let test_package = $test_config.test_packages.0
 
-    try {
-        if $verbose {
-            log_info $"Testing local mirror with: ($test_package)"
-            log_info $"Target directory: ($target_dir)"
-        }
+    if $verbose {
+        log_info $"Testing local mirror with: ($test_package)"
+        log_info $"Target directory: ($target_dir)"
+    }
 
-        cargo run -- mirror `
-            --sources $test_package `
-            --target-type local `
-            --target-path $target_dir
+    let mirror_args = [
+        "cargo" "run" "--" "mirror"
+        "--sources" $test_package
+        "--target-type" "local"
+        "--target-path" $target_dir
+    ]
+    let mirror_result = (run-external ...$mirror_args | complete)
 
-        # Verify the package was mirrored
-        let package_files = (ls $target_dir | where type == file)
+    # Verify the package was mirrored
+    let package_files = (ls $target_dir | where type == file)
 
-        if ($package_files | is-empty) {
-            log_error "No files found in mirror directory"
-            return false
-        }
-
-        log_success $"Local mirror test passed - ($package_files | length) files mirrored"
-
-        if $verbose {
-            print "Mirrored files:"
-            $package_files | select name size | table
-        }
-
-        return true
-    } catch {
-        log_error "Local mirror test failed"
+    if ($package_files | is-empty) {
+        log_error "No files found in mirror directory"
         return false
     }
+
+    log_success $"Local mirror test passed - ($package_files | length) files mirrored"
+
+    if $verbose {
+        print "Mirrored files:"
+        $package_files | select name size | table
+    }
+    return true
 }
 
 # Test S3 operations with mock server
@@ -291,10 +274,14 @@ def test_s3_mock [verbose: bool = false] -> bool {
             AWS_SECRET_ACCESS_KEY: "minioadmin",
             AWS_ENDPOINT_URL: "http://localhost:9000"
         } {
-            cargo run -- mirror `
-                --sources $test_package `
-                --target-type s3 `
-                --target-path "s3://test-bucket/packages"
+            let cargo_args = [
+                "cargo"
+                "run"  "--"  "mirror"
+                "--sources" $test_package
+                "--target-type" "s3"
+                "--target-path" "s3://test-bucket/packages"
+            ]
+            let cargo_result = (run-external ...$cargo_args | complete)
         }
 
         log_success "S3 mock test passed"
@@ -309,105 +296,113 @@ def test_s3_mock [verbose: bool = false] -> bool {
 def test_config_handling [verbose: bool = false] -> bool {
     log_test "Configuration handling"
 
-    try {
-        # Test config generation
-        if $verbose { log_info "Testing config generation..." }
-        cargo run -- init-config -o test-config.json
-
-        if not ("test-config.json" | path exists) {
-            log_error "Config file was not created"
-            return false
-        }
-
-        # Verify config content
-        let config = (open test-config.json)
-        let expected_keys = ["max_concurrent_downloads", "retry_attempts", "timeout_seconds"]
-
-        for key in $expected_keys {
-            if not ($key in ($config | columns)) {
-                log_error $"Missing config key: ($key)"
-                return false
-            }
-        }
-
-        # Test using the config
-        if $verbose { log_info "Testing config usage..." }
-        let test_package = $test_config.test_packages.2  # Use wheel package
-        let target_dir = ($test_config.test_dir | path join "config-test")
-        mkdir $target_dir
-
-        cargo run -- mirror `
-            --sources $test_package `
-            --target-type local `
-            --target-path $target_dir `
-            --config test-config.json
-
-        log_success "Configuration handling test passed"
-        return true
-    } catch {
-        log_error "Configuration handling test failed"
+    if $verbose { log_info "Testing config generation..." }
+    let cargo_args = [
+        "cargo"
+        "run"  "--"  "init"
+        "-o" "test-config.json"
+    ]
+    let cargo_result = (run-external ...$cargo_args | complete)
+    if cargo_result.status != 0 {
+        log_error "Failed to initialize config"
         return false
     }
+    if not ("test-config.json" | path exists) {
+        log_error "Config file was not created"
+        return false
+    }
+
+    # Verify config content
+    let config = (open test-config.json)
+    let expected_keys = ["max_concurrent_downloads", "retry_attempts", "timeout_seconds"]
+
+    for key in $expected_keys {
+        if not ($key in ($config | columns)) {
+            log_error $"Missing config key: ($key)"
+            return false
+        }
+    }
+
+    # Test using the config
+    if $verbose { log_info "Testing config usage..." }
+    let test_package = $test_config.test_packages.2  # Use wheel package
+    let target_dir = ($test_config.test_dir | path join "config-test")
+    mkdir $target_dir
+
+    let cargo_args = [
+        "cargo" "run" "--" "mirror"
+        "--sources" $test_package
+        "--target-type" "local"
+        "--target-path" $target_dir
+        "--config" "test-config.json"
+        ]
+    let cargo_result = (run-external ...$cargo_args | complete)
+
+    log_success "Configuration handling test passed"
+    return true
 }
 
 # Run performance benchmarks
 def run_performance_tests [verbose: bool = false] -> bool {
     log_test "Performance benchmarks"
 
-    try {
-        # Run cargo bench if benchmarks exist
-        if $verbose { log_info "Running performance benchmarks..." }
+    # Run cargo bench if benchmarks exist
+    if $verbose { log_info "Running performance benchmarks..." }
 
-        # Check if benchmarks directory exists
-        if ("benches" | path exists) {
-            cargo bench
-        } else {
-            log_info "No benchmarks found, creating a simple performance test..."
+    # Check if benchmarks directory exists
+    if ("benches" | path exists) {
+        let cargo_args = [
+            "cargo" "bench"
+        ]
+        let cargo_result = (run-external ...$cargo_args | complete)
 
-            # Simple performance test: time multiple package downloads
-            let start_time = (date now)
+        if $verbose { log_info "Performance benchmarks completed" }
+    } else {
+        log_info "No benchmarks found, creating a simple performance test..."
 
-            let target_dir = ($test_config.test_dir | path join "perf-test")
-            mkdir $target_dir
+        # Simple performance test: time multiple package downloads
+        let start_time = (date now)
 
-            # Download multiple packages concurrently
-            let packages = ($test_config.test_packages | str join ",")
+        let target_dir = ($test_config.test_dir | path join "perf-test")
+        mkdir $target_dir
 
-            cargo run -- mirror `
-                --sources $packages `
-                --target-type local `
-                --target-path $target_dir
+        # Download multiple packages concurrently
+        let packages = ($test_config.test_packages | str join ",")
 
-            let end_time = (date now)
-            let duration = ($end_time - $start_time)
+        let cargo_args = [
+            "cargo" "run" "--" "mirror"
+            "--sources" $packages
+            "--target-type" "local"
+            "--target-path" $target_dir
+            ]
+        let cargo_result = (run-external ...$cargo_args | complete)
 
-            let benchmark_result = {
-                test: "multi_package_download",
-                packages: ($test_config.test_packages | length),
-                duration_ms: ($duration / 1ms),
-                timestamp: ($start_time | format date "%Y-%m-%d %H:%M:%S")
-            }
+        let end_time = (date now)
+        let duration = ($end_time - $start_time)
 
-            $benchmark_result | to json | save benchmark-results.json
-
-            log_success $"Performance test completed in ($duration)"
-
-            if $verbose {
-                print "Benchmark results:"
-                $benchmark_result | table
-            }
+        let benchmark_result = {
+            test: "multi_package_download",
+            packages: ($test_config.test_packages | length),
+            duration_ms: ($duration / 1ms),
+            timestamp: ($start_time | format date "%Y-%m-%d %H:%M:%S")
         }
 
-        log_success "Performance tests completed"
-        return true
-    } catch {
-        log_error "Performance tests failed"
-        return false
+        $benchmark_result | to json | save benchmark-results.json
+
+        log_success $"Performance test completed in ($duration)"
+
+        if $verbose {
+            print "Benchmark results:"
+            $benchmark_result | table
+        }
     }
+
+    log_success "Performance tests completed"
+    return true
 }
 
 # Run all tests
-def run_all_tests [verbose: bool = false, timeout: int = 300] -> record {
+def run_all_tests [verbose: bool = false, timeout: int = 300]: nothing -> record {
     log_info "Running comprehensive test suite..."
 
     let start_time = (date now)
@@ -539,63 +534,57 @@ def main [...args] {
     # Setup test environment
     setup_test_env
 
-    try {
-        # Execute command
-        match $command {
-            "unit" => {
-                run_unit_tests $verbose | ignore
-            },
+    # Execute command
+    match $command {
+        "unit" => {
+            run_unit_tests $verbose | ignore
+        },
 
-            "integration" => {
-                run_integration_tests $verbose | ignore
-            },
+        "integration" => {
+            run_integration_tests $verbose | ignore
+        },
 
-            "cargo" => {
-                run_cargo_tests $verbose | ignore
-            },
+        "cargo" => {
+            run_cargo_tests $verbose | ignore
+        },
 
-            "lint" => {
-                run_lint_checks $verbose | ignore
-            },
+        "lint" => {
+            run_lint_checks $verbose | ignore
+        },
 
-            "local-mirror" => {
-                test_local_mirror $verbose | ignore
-            },
+        "local-mirror" => {
+            test_local_mirror $verbose | ignore
+        },
 
-            "s3-mock" => {
-                test_s3_mock $verbose | ignore
-            },
+        "s3-mock" => {
+            test_s3_mock $verbose | ignore
+        },
 
-            "config" => {
-                test_config_handling $verbose | ignore
-            },
+        "config" => {
+            test_config_handling $verbose | ignore
+        },
 
-            "performance" => {
-                run_performance_tests $verbose | ignore
-            },
+        "performance" => {
+            run_performance_tests $verbose | ignore
+        },
 
-            "all" => {
-                run_all_tests $verbose $timeout | ignore
-            },
+        "all" => {
+            run_all_tests $verbose $timeout | ignore
+        },
 
-            "clean" => {
-                cleanup_test_env true
-            },
+        "clean" => {
+            cleanup_test_env true
+        },
 
-            "help" => {
-                show_help
-            },
+        "help" => {
+            show_help
+        },
 
-            _ => {
-                log_error $"Unknown command: ($command)"
-                show_help
-            }
+        _ => {
+            log_error $"Unknown command: ($command)"
+            show_help
         }
-    } finally {
-        # Cleanup unless requested not to
-        cleanup_test_env false
     }
+    # Cleanup unless requested not to
+    cleanup_test_env false
 }
-
-# Run main function with all arguments
-main ...$args

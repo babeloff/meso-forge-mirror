@@ -1,0 +1,17 @@
+{
+  "paths": [
+    {
+      "_path": "bin/coreos-installer",
+      "path_type": "hardlink",
+      "sha256": "1512a173952669bc9c060f6c8e32a5f5378fc84f35761b955bd8122052e9a60b",
+      "size_in_bytes": 18790752
+    },
+    {
+      "_path": "bin/rdcore",
+      "path_type": "hardlink",
+      "sha256": "e439f84fa5efd595a90be5ccff4e30d8ca738a579928fdcfb63e97106895975e",
+      "size_in_bytes": 5170944
+    }
+  ],
+  "paths_version": 1
+}

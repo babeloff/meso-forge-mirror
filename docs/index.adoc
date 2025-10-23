@@ -1,112 +1,332 @@
-= Meso Forge Mirror Documentation
+= Meso Forge Mirror Documentation Index
 :toc: left
 :toclevels: 2
+:sectanchors:
+:sectlinks:
 :sectnums:
+:source-highlighter: highlight.js
 :icons: font
-:source-highlighter: rouge
+:experimental:
 
-== Welcome to Meso Forge Mirror
-
-Meso Forge Mirror is a Rust-based command-line tool designed to mirror conda packages from various sources to target repositories with full conda ecosystem integration through the rattler crates.
-
-== Getting Started
-
-If you're new to meso-forge-mirror, start with the link:operator-guide.adoc[Operator Guide] which provides comprehensive instructions for installation, configuration, and usage.
-
-== Documentation Index
-
-=== Core Documentation
-
-==== link:operator-guide.adoc[Operator Guide]
-Comprehensive guide for operators covering:
-
-* Installation and configuration
-* Repository types and usage patterns
-* Rattler cache integration
-* Performance tuning and troubleshooting
-* Advanced operational workflows
-
-=== Release Documentation
-
-==== link:changelog-rattler-integration.adoc[Rattler Integration Changelog]
-Detailed changelog documenting the major improvements in version 0.2.0:
-
-* New conda package processing capabilities
-* Enhanced repository management features
-* Technical improvements and architecture changes
-* Migration notes and compatibility information
-
-==== link:rattler-integration-summary.adoc[Rattler Integration Summary]
-High-level summary of the rattler ecosystem integration benefits:
-
-* Before/after comparisons of functionality
-* Operational benefits for different user types
-* Performance characteristics and migration path
-* Future roadmap and enhancement plans
-
-== Key Features
-
-=== Enhanced Conda Package Processing
-* Full integration with rattler ecosystem for proper package handling
-* Automatic metadata extraction and validation
-* Platform-aware package organization
-* Comprehensive integrity verification with checksums
-
-=== Repository Structure Management
-* Conda-compliant repository structure with platform subdirectories
-* Automatic generation of repodata.json files
-* Native support for Rattler cache directories
-* S3/MinIO and prefix.dev integration
-
-=== Operational Excellence
-* Enhanced error handling and diagnostics
-* Comprehensive logging for debugging and monitoring
-* Backward compatibility with existing workflows
-* Robust validation pipeline for package integrity
+Welcome to the comprehensive documentation for Meso Forge Mirror, a Rust application for mirroring conda packages from various sources to target repositories with full conda ecosystem integration.
 
 == Quick Start
 
-For immediate usage, here's a basic example of mirroring packages to the Rattler cache:
+New to Meso Forge Mirror? Start here:
 
+. **Installation**: Clone the repository and set up your development environment
+. **Basic Usage**: Learn how to mirror packages and configure targets
+. **First Mirror**: Follow the getting started guide to mirror your first package
+
+== Core Documentation
+
+=== User Guides
+
+[cols="1,3"]
+|===
+|Document |Description
+
+|link:operator-guide.adoc[Operator Guide]
+|Complete installation, configuration, and usage guide for operators and end users
+
+|link:pixi-tasks-guide.adoc[Pixi Tasks Guide]
+|Comprehensive guide to development, testing, and packaging tasks using pixi
+
+|link:nushell-scripts-guide.adoc[Nushell Scripts Guide]
+|Advanced cross-platform scripts for building, testing, and conda operations
+|===
+
+=== Technical Documentation
+
+[cols="1,3"]
+|===
+|Document |Description
+
+|link:rattler-integration-summary.adoc[Rattler Integration Summary]
+|Overview of rattler ecosystem integration benefits and technical details
+
+|link:changelog-rattler-integration.adoc[Rattler Integration Changelog]
+|Detailed changelog for version 0.2.0 improvements and breaking changes
+|===
+
+== Development Workflows
+
+=== Quick Development Setup
+
+Choose your preferred development approach:
+
+==== Option 1: Pixi (Recommended)
 [source,bash]
 ----
-# Mirror packages directly to rattler cache
-meso-forge-mirror mirror \
-  --sources "https://example.com/package1.conda,https://example.com/package2.conda" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/
+pixi install
+pixi shell
+pixi run dev-setup
 ----
 
-== Architecture Overview
+==== Option 2: Traditional Cargo
+[source,bash]
+----
+cargo build
+cargo test
+----
 
-The tool is built with a modular architecture leveraging the rattler ecosystem:
+==== Option 3: Nushell Scripts
+[source,bash]
+----
+nu scripts/build.nu
+nu scripts/test.nu all
+----
 
-* **Core Processing**: Integration with `rattler_conda_types` for type-safe conda operations
-* **Package Streaming**: Uses `rattler_package_streaming` for efficient package processing
-* **Platform Detection**: Leverages `rattler_virtual_packages` for accurate platform identification
-* **Repository Management**: Custom implementation with conda ecosystem compatibility
+=== Key Development Tasks
 
-== Support and Contributing
+[cols="1,2,3"]
+|===
+|Task |Pixi Command |Nushell Script
+
+|Build Project
+|`pixi run build`
+|`nu scripts/build.nu`
+
+|Run Tests
+|`pixi run test`
+|`nu scripts/test.nu unit`
+
+|Build Conda Package
+|`pixi run conda-build`
+|`nu scripts/conda-ops.nu build`
+
+|Integration Tests
+|`pixi run integration-test`
+|`nu scripts/test.nu integration`
+
+|Code Quality Check
+|`pixi run ci-check`
+|`nu scripts/test.nu lint`
+|===
+
+== Feature Overview
+
+=== Core Features
+
+* **Enhanced Conda Package Processing**: Full integration with rattler ecosystem
+* **Multi-Target Support**: Local, S3/MinIO, and prefix.dev repositories
+* **Platform-Aware Organization**: Automatic platform-specific organization
+* **Integrity Verification**: MD5 and SHA256 checksum validation
+* **Concurrent Operations**: Configurable parallel downloads with retry logic
+
+=== Target Repository Types
+
+[cols="1,3,2"]
+|===
+|Type |Description |Use Cases
+
+|Local
+|File system repositories with conda structure
+|Development, caching, offline usage
+
+|S3/MinIO
+|Object storage with platform organization
+|Production deployments, cloud hosting
+
+|prefix.dev
+|Modern conda channel hosting
+|Public/private channel distribution
+|===
+
+== Advanced Topics
+
+=== Cross-Platform Development
+
+The project supports building and testing across multiple platforms:
+
+* Linux (x86_64, ARM64)
+* macOS (Intel, Apple Silicon)
+* Windows (x86_64)
+
+See the link:nushell-scripts-guide.adoc#_supported_platforms[Nushell Scripts Guide] for platform-specific build instructions.
+
+=== Conda Package Operations
+
+Comprehensive conda package lifecycle management:
+
+* Building packages for multiple platforms
+* Testing package installation and integrity
+* Publishing to various channels
+* Package validation and verification
+
+Detailed workflows are covered in:
+* link:pixi-tasks-guide.adoc#_conda_package_building[Pixi Tasks Guide - Conda Operations]
+* link:nushell-scripts-guide.adoc#_conda_operations_script[Nushell Scripts Guide - Conda Operations]
+
+=== Integration Testing
+
+The project includes comprehensive integration testing:
+
+* Local repository mirroring
+* S3/MinIO backend testing
+* prefix.dev channel operations
+* Package validation workflows
+* Performance and stress testing
+
+== Environment Setup
+
+=== Prerequisites
+
+[cols="1,2,3"]
+|===
+|Tool |Required For |Installation
+
+|Rust/Cargo
+|Core development
+|https://rustup.rs/
+
+|Pixi
+|Task management (recommended)
+|https://pixi.sh/
+
+|Nushell
+|Advanced scripts
+|https://www.nushell.sh/
+
+|conda-build
+|Package building
+|`conda install conda-build`
+
+|rattler-build
+|Modern package building
+|`pixi add rattler-build`
+|===
+
+=== Environment Variables
+
+Key environment variables for development:
+
+[cols="1,3"]
+|===
+|Variable |Purpose
+
+|`RUST_LOG`
+|Logging level control (`debug`, `info`, `warn`, `error`)
+
+|`GITHUB_TOKEN`
+|GitHub API access for fetching staged recipes
+
+|`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+|S3/MinIO authentication
+
+|`CONDA_PREFIX`
+|Conda environment path (auto-set by pixi)
+|===
+
+== Common Workflows
+
+=== Daily Development
+[source,bash]
+----
+pixi shell                    # Activate environment
+pixi run dev-setup           # Build + test + lint
+pixi run watch               # Continuous development
+----
+
+=== Package Development
+[source,bash]
+----
+pixi run conda-build         # Build conda package
+pixi run conda-test-local    # Test installation
+pixi run conda-verify        # Verify integrity
+----
+
+=== Release Preparation
+[source,bash]
+----
+pixi run prepare-release     # Complete preparation
+pixi run ci-check           # CI-style verification
+pixi run upload-all-packages # Publish to channels
+----
+
+== Troubleshooting
+
+=== Common Issues
+
+[cols="1,2,2"]
+|===
+|Issue |Cause |Solution
+
+|Build failures
+|Missing system dependencies
+|Run setup scripts or install prerequisites
+
+|Test failures
+|Environment not activated
+|Use `pixi shell` or check `CONDA_PREFIX`
+
+|Package build errors
+|Missing conda-build tools
+|Switch to packaging environment: `pixi shell -e packaging`
+
+|Cross-compilation issues
+|Missing Rust targets
+|Install targets: `rustup target add <target-triple>`
+|===
 
 === Getting Help
-* Check the link:operator-guide.adoc#troubleshooting[troubleshooting section] for common issues
-* Review the link:changelog-rattler-integration.adoc[changelog] for recent changes
-* Enable debug logging with `RUST_LOG=debug` for detailed diagnostics
 
-=== Contributing
-Contributions are welcome! The tool is open source and follows standard Rust development practices:
+. **Check Documentation**: Review the relevant guide for your task
+. **Enable Debug Logging**: Set `RUST_LOG=debug` for detailed output
+. **Use Script Help**: Run `nu scripts/<script>.nu --help` for script options
+. **Check Environment**: Verify all prerequisites are installed and configured
 
-* Unit tests for core functionality
-* Integration tests for real-world scenarios
-* Comprehensive documentation and examples
-* Type-safe error handling throughout
+== Contributing
 
-== Version Information
+=== Development Process
 
-This documentation covers meso-forge-mirror version 0.2.0 with rattler ecosystem integration.
+. Fork the repository
+. Set up development environment with pixi
+. Make changes following the coding standards
+. Run comprehensive tests: `pixi run ci-check`
+. Submit pull request with clear description
 
-For previous versions or migration information, see the link:changelog-rattler-integration.adoc[changelog documentation].
+=== Code Quality
+
+The project maintains high code quality through:
+
+* Comprehensive testing (unit, integration, performance)
+* Linting with clippy and formatting with rustfmt
+* Cross-platform compatibility testing
+* Documentation requirements for new features
+
+=== Documentation Standards
+
+When contributing:
+
+* Update relevant documentation for any feature changes
+* Add examples for new functionality
+* Ensure cross-references between documents are maintained
+* Test documentation builds and links
+
+== Version History
+
+=== Current Version (0.2.0+)
+* Enhanced rattler ecosystem integration
+* Improved conda package processing
+* Advanced Nushell-based development scripts
+* Comprehensive pixi task workflows
+
+=== Previous Versions
+* 0.1.x: Initial conda package mirroring capabilities
+* Pre-1.0: Basic package download and organization
+
+== Support and Community
+
+* **Repository**: https://github.com/babeloff/meso-forge-mirror
+* **Issues**: Report bugs and request features via GitHub Issues
+* **Discussions**: Community discussions and questions
+* **Documentation**: This documentation set is continuously updated
+
+== License
+
+Meso Forge Mirror is open source software. Please refer to the LICENSE file in the repository root for complete licensing information.
 
 ---
 
-Last updated: {localdate}
+*This documentation index is maintained alongside the project. For the most current information, always refer to the latest version in the repository.*

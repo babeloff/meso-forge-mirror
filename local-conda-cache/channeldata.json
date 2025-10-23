@@ -1,0 +1,77 @@
+{
+  "channeldata_version": 1,
+  "packages": {
+    "coreos-installer": {
+      "activate.d": false,
+      "binary_prefix": false,
+      "deactivate.d": false,
+      "description": "coreos-installer is a program to assist with installing Fedora CoreOS (FCOS) and Red Hat Enterprise Linux CoreOS (RHCOS). It can: - Install the operating system to a target disk, optionally customizing it   with an Ignition config or first-boot kernel parameters - Download and verify an operating system image for various cloud,   virtualization, or bare metal platforms - List Fedora CoreOS images available for download - Embed an Ignition config in a live ISO image to customize the running system - Wrap an Ignition config in an initrd image for PXE boot customization",
+      "dev_url": "https://github.com/coreos/coreos-installer",
+      "doc_source_url": null,
+      "doc_url": "https://coreos.github.io/coreos-installer/",
+      "home": "https://github.com/coreos/coreos-installer",
+      "icon_hash": null,
+      "icon_url": null,
+      "identifiers": null,
+      "keywords": null,
+      "license": "Apache-2.0",
+      "post_link": false,
+      "pre_link": false,
+      "pre_unlink": false,
+      "recipe_origin": null,
+      "run_exports": {},
+      "source_git_url": null,
+      "source_url": null,
+      "subdirs": [
+        "noarch"
+      ],
+      "summary": "Installer for CoreOS disk images",
+      "tags": null,
+      "text_prefix": false,
+      "timestamp": 1761160191,
+      "version": "0.25.0"
+    },
+    "zlib": {
+      "activate.d": false,
+      "binary_prefix": false,
+      "deactivate.d": false,
+      "description": "zlib is designed to be a free, general-purpose, lossless data-compression library for use on virtually any computer hardware and operating system.",
+      "dev_url": "https://github.com/madler/zlib",
+      "doc_source_url": null,
+      "doc_url": "http://zlib.net/manual.html",
+      "home": "http://zlib.net/",
+      "icon_hash": null,
+      "icon_url": null,
+      "identifiers": null,
+      "keywords": null,
+      "license": "Zlib",
+      "post_link": false,
+      "pre_link": false,
+      "pre_unlink": false,
+      "recipe_origin": null,
+      "run_exports": {
+        "1.2.13": {
+          "weak": [
+            "libzlib >=1.2.13,<1.3.0a0"
+          ]
+        }
+      },
+      "source_git_url": null,
+      "source_url": [
+        "http://zlib.net/zlib-1.2.13.tar.gz",
+        "https://gnupg.org/ftp/gcrypt/zlib/zlib-1.2.13.tar.gz"
+      ],
+      "subdirs": [
+        "noarch"
+      ],
+      "summary": "Massively spiffy yet delicately unobtrusive compression library",
+      "tags": null,
+      "text_prefix": true,
+      "timestamp": 1686575231,
+      "version": "1.2.13"
+    }
+  },
+  "subdirs": [
+    "noarch"
+  ]
+}

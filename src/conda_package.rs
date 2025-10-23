@@ -111,7 +111,7 @@ impl CondaPackageHandler {
     }
 
     /// Extract metadata from filename (fallback approach)
-    fn extract_metadata_from_filename(&self, filename: &str) -> Result<SimpleIndexJson> {
+    pub fn extract_metadata_from_filename(&self, filename: &str) -> Result<SimpleIndexJson> {
         debug!("Extracting metadata from filename: {}", filename);
 
         // Remove extension
@@ -196,7 +196,7 @@ impl CondaPackageHandler {
     }
 
     /// Extract platform from filename
-    fn extract_platform_from_filename(filename: &str) -> Option<&str> {
+    pub fn extract_platform_from_filename(filename: &str) -> Option<&str> {
         // Remove extension
         let name = filename
             .strip_suffix(".conda")
@@ -244,7 +244,7 @@ impl CondaPackageHandler {
     }
 
     /// Check if a file is a conda package based on extension
-    fn is_conda_package(filename: &str) -> bool {
+    pub fn is_conda_package(filename: &str) -> bool {
         filename.ends_with(".conda") || filename.ends_with(".tar.bz2")
     }
 
@@ -342,16 +342,6 @@ impl CondaPackageHandler {
 
         debug!("Package validation passed for: {}", package.filename);
         Ok(())
-    }
-
-    /// Get cached package by filename
-    pub fn get_cached_package(&self, filename: &str) -> Option<&ProcessedPackage> {
-        self.cache.get(filename)
-    }
-
-    /// Clear the package cache
-    pub fn clear_cache(&mut self) {
-        self.cache.clear();
     }
 
     /// Get statistics about processed packages

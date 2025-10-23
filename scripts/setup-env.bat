@@ -1,11 +1,11 @@
 @echo off
-REM Environment setup script for meso-forge-mirror development on Windows
+REM Environment setup script for meso-forge-mirror development
 REM This script is automatically sourced by pixi when activating the environment
 
-echo Setting up meso-forge-mirror development environment for Windows...
+echo Setting up meso-forge-mirror development environment...
 
 REM Check if cargo is available
-where cargo >nul 2>&1
+where cargo >nul 2>nul
 if %errorlevel% neq 0 (
     echo Warning: cargo not found in PATH
 )
@@ -20,56 +20,66 @@ if not defined AWS_ACCESS_KEY_ID set AWS_ACCESS_KEY_ID=minioadmin
 if not defined AWS_SECRET_ACCESS_KEY set AWS_SECRET_ACCESS_KEY=minioadmin
 
 REM Create necessary directories
-if not exist target mkdir target
-if not exist examples\output mkdir examples\output
-if not exist test-data mkdir test-data
+if not exist "target" mkdir target
+if not exist "examples" mkdir examples
+if not exist "examples\output" mkdir examples\output
+if not exist "test-data" mkdir test-data
+
+REM Set up git hooks if in a git repository
+if exist ".git" (
+    REM Install pre-commit hooks
+    where pre-commit >nul 2>nul
+    if %errorlevel% equ 0 (
+        pre-commit install --install-hooks
+    )
+)
 
 REM Verify cargo configuration
-if exist Cargo.toml (
+if exist "Cargo.toml" (
     echo ✓ Cargo.toml found
 ) else (
     echo ⚠ Warning: Cargo.toml not found in current directory
 )
 
-REM Check for required system dependencies
+REM Function to check dependency (implemented as subroutine)
+goto :main
+
+:check_dependency
+set command=%~1
+set purpose=%~2
+
+where %command% >nul 2>nul
+if %errorlevel% equ 0 (
+    echo ✓ %command% available
+) else (
+    echo ⚠ %command% not found ^(required for: %purpose%^)
+)
+goto :eof
+
+:main
 echo Checking system dependencies:
-
-where git >nul 2>&1
-if %errorlevel% equ 0 (
-    echo ✓ git available
-) else (
-    echo ⚠ git not found ^(required for: version control^)
-)
-
-where curl >nul 2>&1
-if %errorlevel% equ 0 (
-    echo ✓ curl available
-) else (
-    echo ⚠ curl not found ^(required for: HTTP requests testing^)
-)
-
-where pkg-config >nul 2>&1
-if %errorlevel% equ 0 (
-    echo ✓ pkg-config available
-) else (
-    echo ⚠ pkg-config not found ^(may be needed for some dependencies^)
-)
+call :check_dependency "pkg-config" "OpenSSL linking"
+call :check_dependency "git" "version control"
+call :check_dependency "curl" "HTTP requests testing"
 
 REM Rust toolchain verification
-where cargo >nul 2>&1
+where cargo >nul 2>nul
 if %errorlevel% equ 0 (
-    for /f "tokens=2" %%i in ('cargo --version') do set RUST_VERSION=%%i
-    echo ✓ Rust toolchain: !RUST_VERSION!
+    for /f "tokens=2" %%i in ('cargo --version') do set rust_version=%%i
+    echo ✓ Rust toolchain: !rust_version!
 
     REM Check for required targets for cross-compilation
-    cargo target list | findstr "x86_64-pc-windows-gnu" >nul
+    where rustup >nul 2>nul
     if %errorlevel% equ 0 (
-        echo ✓ Windows GNU target available
-    )
+        rustup target list --installed | findstr "x86_64-unknown-linux-gnu" >nul
+        if %errorlevel% equ 0 (
+            echo ✓ Linux target available
+        )
 
-    cargo target list | findstr "x86_64-pc-windows-msvc" >nul
-    if %errorlevel% equ 0 (
-        echo ✓ Windows MSVC target available
+        rustup target list --installed | findstr "x86_64-apple-darwin" >nul
+        if %errorlevel% equ 0 (
+            echo ✓ macOS target available
+        )
     )
 )
 

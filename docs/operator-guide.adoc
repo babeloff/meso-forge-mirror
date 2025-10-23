@@ -35,6 +35,8 @@ The tool has been enhanced with rattler ecosystem integration to provide proper 
 
 === Building from Source
 
+==== Traditional Cargo Build
+
 [source,bash]
 ----
 git clone https://github.com/babeloff/meso-forge-mirror.git
@@ -43,6 +45,54 @@ cargo build --release
 ----
 
 The compiled binary will be available at `target/release/meso-forge-mirror`.
+
+==== Enhanced Development Setup with Pixi (Recommended)
+
+For a complete development environment with all tools and dependencies:
+
+[source,bash]
+----
+git clone https://github.com/babeloff/meso-forge-mirror.git
+cd meso-forge-mirror
+
+# Install pixi if not already installed
+curl -fsSL https://pixi.sh/install.sh | bash
+
+# Set up complete development environment
+pixi install
+pixi shell
+
+# Build with enhanced configuration
+pixi run build-release
+----
+
+==== Advanced Building with Nushell Scripts
+
+For cross-platform building and advanced options:
+
+[source,bash]
+----
+# Install Nushell (optional)
+cargo install nu
+
+# Interactive platform selection
+nu scripts/build.nu
+
+# Build for specific platform
+nu scripts/build.nu linux-64
+nu scripts/build.nu osx-arm64
+nu scripts/build.nu win-64
+
+# Show all available build options
+nu scripts/build.nu --help
+----
+
+The Nushell build script provides:
+* Interactive platform selection
+* Proper conda environment setup
+* Cross-compilation support
+* Enhanced error reporting
+* Build verification and testing
 
 === Installing to System PATH
 
@@ -63,7 +113,7 @@ Create a default configuration file:
 
 [source,bash]
 ----
-meso-forge-mirror init-config -o meso-forge-mirror.json
+meso-forge-mirror init -o meso-forge-mirror.json
 ----
 
 This generates a configuration file with the following structure:
@@ -187,9 +237,10 @@ prefix.dev channels provide hosted conda repositories with features like:
 [source,bash]
 ----
 meso-forge-mirror mirror \
-  --sources "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
-  --target-type local \
-  --target-path ./my-local-repo
+  --src "https://conda.anaconda.org/conda-forge/linux-64/zlib-1.2.13-hd590300_5.conda" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ./my-local-repo
 ----
 
 *Enhanced Behavior*: The tool now automatically:
@@ -204,9 +255,10 @@ meso-forge-mirror mirror \
 [source,bash]
 ----
 meso-forge-mirror mirror \
-  --sources "https://example.com/packages/my-package-1.0.0.tar.bz2" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/
+  --src "https://example.com/packages/my-package-1.0.0.tar.bz2" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/.cache/rattler/cache/pkgs/
 ----
 
 *Rattler Integration Benefits*:
@@ -219,18 +271,27 @@ meso-forge-mirror mirror \
 
 [source,bash]
 ----
-# Using multiple --sources flags
+# Mirror multiple packages (run command multiple times)
 meso-forge-mirror mirror \
-  --sources "https://example.com/pkg1.tar.bz2" \
-  --sources "https://example.com/pkg2.tar.bz2" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/
+  --src "https://example.com/pkg1.tar.bz2" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/.cache/rattler/cache/pkgs/
 
-# Using comma-separated values
 meso-forge-mirror mirror \
-  --sources "https://example.com/pkg1.tar.bz2,https://example.com/pkg2.tar.bz2" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/
+  --src "https://example.com/pkg2.tar.bz2" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/.cache/rattler/cache/pkgs/
+
+# Or use shell scripts to automate multiple packages
+for pkg in pkg1.tar.bz2 pkg2.tar.bz2; do
+  meso-forge-mirror mirror \
+    --src "https://example.com/$pkg" \
+    --src-type url \
+    --tgt-type local \
+    --tgt ~/.cache/rattler/cache/pkgs/
+done
 ----
 
 === Advanced Operations
@@ -243,9 +304,10 @@ export AWS_ACCESS_KEY_ID="your_access_key"
 export AWS_SECRET_ACCESS_KEY="your_secret_key"
 
 meso-forge-mirror mirror \
-  --sources "https://example.com/packages/my-package-1.0.0.tar.bz2" \
-  --target-type s3 \
-  --target-path "s3://my-conda-bucket/linux-64/" \
+  --src "https://example.com/packages/my-package-1.0.0.tar.bz2" \
+  --src-type url \
+  --tgt-type s3 \
+  --tgt "s3://my-conda-bucket/linux-64/" \
   --config ./config.json
 ----
 
@@ -270,9 +332,10 @@ export AWS_ACCESS_KEY_ID="minio_access_key"
 export AWS_SECRET_ACCESS_KEY="minio_secret_key"
 
 meso-forge-mirror mirror \
-  --sources "https://example.com/package.tar.bz2" \
-  --target-type s3 \
-  --target-path "s3://conda-packages/linux-64/" \
+  --src "https://example.com/package.tar.bz2" \
+  --src-type url \
+  --tgt-type s3 \
+  --tgt "s3://conda-packages/linux-64/" \
   --config ./minio-config.json
 ----
 
@@ -281,10 +344,107 @@ meso-forge-mirror mirror \
 [source,bash]
 ----
 meso-forge-mirror mirror \
-  --sources "https://example.com/package.tar.bz2" \
-  --target-type prefix-dev \
-  --target-path "https://prefix.dev/channels/my-channel"
+  --src "https://example.com/package.tar.bz2" \
+  --src-type url \
+  --tgt-type prefix-dev \
+  --tgt "https://prefix.dev/channels/my-channel"
 ----
+
+=== Source Types
+
+The `--src-type` option supports different source formats for flexible package acquisition:
+
+==== Remote Conda Packages (`url`)
+
+[source,bash]
+----
+meso-forge-mirror mirror \
+  --src "https://conda.anaconda.org/conda-forge/linux-64/package.conda" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ./local-repo
+----
+
+==== Local Conda Packages (`local`)
+
+[source,bash]
+----
+meso-forge-mirror mirror \
+  --src "/path/to/package.conda" \
+  --src-type local \
+  --tgt-type local \
+  --tgt ./local-repo
+----
+
+==== ZIP Archives (`zip`, `zip-url`)
+
+For ZIP files containing conda packages:
+
+[source,bash]
+----
+# Local ZIP file
+meso-forge-mirror mirror \
+  --src "packages.zip" \
+  --src-type zip \
+  --src-path "^conda-packages/.*" \
+  --tgt-type local \
+  --tgt ./local-repo
+
+# Remote ZIP file
+meso-forge-mirror mirror \
+  --src "https://example.com/build-artifacts.zip" \
+  --src-type zip-url \
+  --src-path "^artifacts/conda/.*" \
+  --tgt-type local \
+  --tgt ./local-repo
+----
+
+==== Tarball Archives (`tgz`, `tgz-url`)
+
+For tar.gz files containing conda packages:
+
+[source,bash]
+----
+# Local tarball
+meso-forge-mirror mirror \
+  --src "packages.tar.gz" \
+  --src-type tgz \
+  --tgt-type local \
+  --tgt ./local-repo
+
+# Remote tarball (e.g., GitHub release)
+meso-forge-mirror mirror \
+  --src "https://github.com/owner/repo/archive/v1.0.tar.gz" \
+  --src-type tgz-url \
+  --tgt-type local \
+  --tgt ./local-repo
+----
+
+*Note*: ZIP and ZIP-URL types require the `--src-path` option to specify a regular expression pattern matching file paths within the archive containing conda packages. When multiple files match the pattern, only the first match will be processed.
+
+=== Regular Expression Patterns
+
+The `--src-path` parameter accepts regular expressions to match file paths within ZIP archives. When a pattern matches multiple files, only the first matching conda package encountered will be mirrored:
+
+* `^artifacts/.*` - Match files in the `artifacts/` directory and subdirectories
+* `.*\\.conda$` - Match files ending with `.conda` anywhere in the archive
+* `^(linux-64|osx-64)/.*\\.conda$` - Match conda packages in specific platform directories
+* `build-\\d+/conda/.*` - Match files in numbered build directories under `conda/`
+
+Examples:
+[source,bash]
+----
+# Match conda packages in any platform-specific directory
+--src-path "^(linux-64|osx-64|win-64)/.*\\.(conda|tar\\.bz2)$"
+
+# Match only packages in a specific build directory (first match only)
+--src-path "^build-artifacts/conda/linux-64/.*"
+
+# Match packages anywhere with specific naming pattern (first match only)
+--src-path ".*python.*\\.(conda|tar\\.bz2)$"
+----
+
+*Important*: When using regex patterns, the tool will process only the first conda package that matches the pattern. This ensures predictable behavior when multiple packages could match the same pattern.
 
 == Operational Workflows
 
@@ -303,9 +463,10 @@ When packages are pending in conda-forge staged recipes, you can mirror the CI-b
 ----
 # Mirror staged recipe artifacts to local cache
 meso-forge-mirror mirror \
-  --sources "https://github.com/conda-forge/staged-recipes/suites/12345/artifacts/67890/download" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/ \
+  --src "https://github.com/conda-forge/staged-recipes/suites/12345/artifacts/67890/download" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/.cache/rattler/cache/pkgs/ \
   --config ./config-with-github.json
 ----
 
@@ -320,10 +481,16 @@ mkdir -p ~/conda-mirror/{linux-64,osx-64,win-64,noarch}
 
 # Mirror platform-specific packages
 meso-forge-mirror mirror \
-  --sources "https://example.com/linux-64/package1.conda" \
-  --sources "https://example.com/linux-64/package2.conda" \
-  --target-type local \
-  --target-path ~/conda-mirror/linux-64/
+  --src "https://example.com/linux-64/package1.conda" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/conda-mirror/linux-64/
+
+meso-forge-mirror mirror \
+  --src "https://example.com/linux-64/package2.conda" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ~/conda-mirror/linux-64/
 
 # Configure conda/mamba to use local mirror
 conda config --add channels file://~/conda-mirror
@@ -349,9 +516,10 @@ TARGET_PATH="~/.cache/rattler/cache/pkgs/"
 for package in "${PACKAGES[@]}"; do
     echo "Mirroring $package..."
     meso-forge-mirror mirror \
-        --sources "$package" \
-        --target-type local \
-        --target-path "$TARGET_PATH" \
+        --src "$package" \
+        --src-type url \
+        --tgt-type local \
+        --tgt "$TARGET_PATH" \
         --config ./config.json
 done
 ----
@@ -467,9 +635,10 @@ The tool streams package data to minimize memory usage, but consider:
 ----
 # Enable debug logging to diagnose issues
 RUST_LOG=debug meso-forge-mirror mirror \
-  --sources "https://problematic-url.com/package.conda" \
-  --target-type local \
-  --target-path ./debug-test
+  --src "https://problematic-url.com/package.conda" \
+  --src-type url \
+  --tgt-type local \
+  --tgt ./debug-test
 ----
 
 ==== S3 Configuration Problems
@@ -556,9 +725,10 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         meso-forge-mirror mirror \
-          --sources "${{ github.event.inputs.package_urls }}" \
-          --target-type s3 \
-          --target-path "s3://conda-staging/packages/"
+          --src "${{ github.event.inputs.package_url }}" \
+          --src-type url \
+          --tgt-type s3 \
+          --tgt "s3://conda-staging/packages/"
 ----
 
 === Docker Integration
@@ -641,19 +811,23 @@ ENTRYPOINT ["meso-forge-mirror"]
 [source,bash]
 ----
 # Initialize configuration
-meso-forge-mirror init-config -o config.json
+meso-forge-mirror init -o config.json
 
 # Mirror to Rattler cache
-meso-forge-mirror mirror \
-  --sources "URL1,URL2" \
-  --target-type local \
-  --target-path ~/.cache/rattler/cache/pkgs/
+for url in URL1 URL2; do
+  meso-forge-mirror mirror \
+    --src "$url" \
+    --src-type url \
+    --tgt-type local \
+    --tgt ~/.cache/rattler/cache/pkgs/
+done
 
 # Mirror to S3 with config
 meso-forge-mirror mirror \
-  --sources "URL" \
-  --target-type s3 \
-  --target-path "s3://bucket/path" \
+  --src "URL" \
+  --src-type url \
+  --tgt-type s3 \
+  --tgt "s3://bucket/path" \
   --config config.json
 
 # Debug mode (enhanced logging for conda package processing)
