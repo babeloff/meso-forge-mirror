@@ -25,10 +25,10 @@ This document provides guidelines and instructions for contributing to the proje
    ```bash
    # Via cargo
    cargo install nu
-   
+
    # Or via conda
    conda install -c conda-forge nushell
-   
+
    # Or via package manager
    brew install nushell  # macOS
    ```
@@ -84,12 +84,12 @@ This document provides guidelines and instructions for contributing to the proje
    ```bash
    # Complete development setup (build + test + lint + format)
    pixi run dev-setup
-   
+
    # OR individual commands
    pixi run fmt
    pixi run clippy
    pixi run test
-   
+
    # OR use Nushell scripts
    nu scripts/test.nu lint
    ```

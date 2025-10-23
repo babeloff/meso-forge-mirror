@@ -22,8 +22,23 @@ A Rust application for mirroring conda packages from various sources to target r
 - Concurrent downloads with configurable parallelism
 - Automatic retry with exponential backoff
 - Configurable timeouts and connection settings
-- GitHub integration for fetching artifacts
+- **GitHub Artifacts Integration**: Download conda packages from GitHub Actions artifacts
+- **Azure DevOps Integration**: Download conda packages from Azure DevOps build artifacts
 - Enhanced error handling and diagnostics
+
+### GitHub Artifacts Integration
+- **Info Command**: Discover and list artifacts from GitHub repositories
+- **GitHub Source Type**: Use `--src-type github` to mirror from GitHub artifacts
+- **Flexible Repository Formats**: Support for `owner/repo`, GitHub URLs, and specific artifact IDs
+- **Smart Filtering**: Filter artifacts by name patterns and expiration status
+- **Authentication Support**: GitHub token support for private repositories and higher rate limits
+
+### Azure DevOps Integration (New!)
+- **Build and Artifact Discovery**: List builds and artifacts from Azure DevOps projects
+- **Azure Source Type**: Use `--src-type azure` to mirror from Azure DevOps artifacts
+- **conda-forge Support**: Direct support for conda-forge's Azure DevOps infrastructure
+- **Flexible Project Formats**: Support for `org/project`, Azure DevOps URLs, and specific build IDs
+- **Personal Access Token Authentication**: Secure authentication for Azure DevOps access
 
 ## Installation
 
@@ -47,7 +62,90 @@ First, create a configuration file:
 meso-forge-mirror init -o config.json
 ```
 
-This creates a configuration file with default settings:
+This creates a configuration file with default settings including GitHub and Azure DevOps token support:
+
+```json
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "github_token": null,
+  "azure_devops_token": null,
+  "s3_region": null,
+  "s3_endpoint": null
+}
+```
+
+For GitHub integration, set your token:
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+# or add it to the config file
+```
+
+For Azure DevOps integration, set your Personal Access Token:
+```bash
+export AZURE_DEVOPS_TOKEN=your_pat_token_here
+# or add it to the config file
+```
+
+### Quick Start
+
+#### Discover GitHub Artifacts
+
+```bash
+# List all artifacts for a repository
+meso-forge-mirror info --github conda-forge/numpy
+
+# Filter artifacts by name pattern
+meso-forge-mirror info --github owner/repo --name-filter "conda.*linux.*"
+```
+
+#### Mirror from GitHub Artifacts
+
+```bash
+# Mirror from GitHub artifacts to cache
+meso-forge-mirror mirror --src-type github --src owner/repository
+
+# Mirror to local conda repository
+meso-forge-mirror mirror \
+  --src-type github \
+  --src owner/repo \
+  --tgt-type local \
+  --tgt ./conda-repo
+
+# Process specific artifact by ID
+meso-forge-mirror mirror --src-type github --src owner/repo#123456789
+```
+
+#### Discover Azure DevOps Builds and Artifacts
+
+```bash
+# List recent builds for a project
+meso-forge-mirror info --azure conda-forge/feedstock-builds
+
+# List artifacts for a specific build
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+
+# Filter artifacts by name pattern
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331 --name-filter "conda.*"
+```
+
+#### Mirror from Azure DevOps Artifacts
+
+```bash
+# Mirror from specific build to cache
+meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds#1374331
+
+# Mirror to local conda repository
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --tgt-type local \
+  --tgt ./conda-repo
+
+# Process latest successful build
+meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds
+```
 
 ```json
 {
@@ -124,11 +222,97 @@ meso-forge-mirror mirror \
   --src-path "^artifacts/.*" \
   --tgt /path/to/repository
 
+# GitHub Artifacts
+meso-forge-mirror mirror \
+  --src owner/repository \
+  --src-type github \
+  --tgt /path/to/repository
+
+# GitHub with artifact name filtering
+meso-forge-mirror mirror \
+  --src owner/repository \
+  --src-type github \
+  --src-path "conda.*linux.*" \
+  --tgt /path/to/repository
+
+# Azure DevOps Artifacts (NEW!)
+meso-forge-mirror mirror \
+  --src organization/project#build_id \
+  --src-type azure \
+  --tgt /path/to/repository
+
+# Azure DevOps with artifact name filtering
+meso-forge-mirror mirror \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-type azure \
+  --src-path "conda.*packages.*" \
+  --tgt /path/to/repository
+
 # Local tarball containing conda packages
 meso-forge-mirror mirror \
-  --src /path/to/packages.tar.gz \
+  --src ./packages.tar.gz \
   --src-type tgz \
   --tgt /path/to/repository
+```
+
+### GitHub Artifacts Integration
+
+The tool now supports downloading conda packages from GitHub Actions artifacts:
+
+#### Available Commands
+
+```bash
+# Info command - discover artifacts
+meso-forge-mirror info --github owner/repository
+meso-forge-mirror info --github https://github.com/owner/repository
+meso-forge-mirror info --github owner/repo --name-filter "conda.*" --exclude-expired true
+
+# Mirror command - download and process artifacts
+meso-forge-mirror mirror --src-type github --src owner/repository
+meso-forge-mirror mirror --src-type github --src owner/repository#artifact_id
+```
+
+#### GitHub Authentication
+
+For private repositories and higher rate limits, set a GitHub token:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+# or add to config file: "github_token": "ghp_your_token_here"
+```
+
+#### Real-world GitHub Examples
+
+```bash
+# Example 1: Mirror conda-forge feedstock artifacts
+meso-forge-mirror info --github conda-forge/numpy-feedstock --name-filter "conda.*"
+meso-forge-mirror mirror \
+  --src-type github \
+  --src conda-forge/numpy-feedstock \
+  --src-path "conda.*packages.*" \
+  --tgt-type local \
+  --tgt ./my-conda-channel
+
+# Example 2: CI/CD integration - mirror PR build artifacts
+meso-forge-mirror mirror \
+  --src-type github \
+  --src myorg/my-package \
+  --src-path "conda.*$(git rev-parse --short HEAD).*" \
+  --tgt-type s3 \
+  --tgt s3://staging-conda-channel/pr-builds
+
+# Example 3: Process specific artifact by ID
+meso-forge-mirror info --github owner/repo  # Find artifact ID
+meso-forge-mirror mirror --src-type github --src owner/repo#123456789
+
+# Example 4: conda-forge Azure DevOps workflow
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-path "conda.*packages.*" \
+  --tgt-type local \
+  --tgt ./pr-31205-packages
 ```
 
 ### Regular Expression Patterns
@@ -137,7 +321,7 @@ The `--src-path` parameter accepts regular expressions for flexible file matchin
 
 Common patterns:
 - `^artifacts/.*` - Match files in artifacts/ directory
-- `^(linux-64|osx-64)/.*` - Match platform-specific directories  
+- `^(linux-64|osx-64)/.*` - Match platform-specific directories
 - `.*\.conda$` - Match only .conda files
 - `^build-\d+/conda/.*` - Match numbered build directories
 
@@ -181,14 +365,24 @@ meso-forge-mirror mirror \
 
 ## Documentation
 
-For comprehensive documentation, see the `docs/` directory:
+For comprehensive documentation, see the `docs/` directory and integration guides:
 
 - **[Operator Guide](docs/operator-guide.adoc)**: Complete installation, configuration, and usage guide
+- **[GitHub Integration Guide](docs/chapters/github-integration.adoc)**: Comprehensive guide for GitHub Artifacts integration
+- **[Azure DevOps Integration Guide](docs/chapters/azure-devops-integration.adoc)**: Comprehensive guide for Azure DevOps integration
+- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)**: Technical details of integration implementations
 - **[Pixi Tasks Guide](docs/pixi-tasks-guide.adoc)**: Complete guide to development, testing, and packaging tasks
 - **[Nushell Scripts Guide](docs/nushell-scripts-guide.adoc)**: Advanced cross-platform scripts for building and testing
 - **[Rattler Integration Summary](docs/rattler-integration-summary.adoc)**: Overview of rattler ecosystem integration benefits
 - **[Changelog](docs/changelog-rattler-integration.adoc)**: Detailed changelog for version 0.2.0 improvements
 - **[Documentation Index](docs/index.adoc)**: Complete documentation overview
+
+### Integration Quick References
+
+- **[GitHub Config Example](examples/github-config.json)**: Example configuration with GitHub token
+- **[GitHub Usage Examples](examples/github-usage-examples.sh)**: Executable script with GitHub examples
+- **[Azure DevOps Config Example](examples/azure-config.json)**: Example configuration with Azure DevOps PAT
+- **[Azure DevOps Usage Examples](examples/azure-usage-examples.sh)**: Executable script with Azure DevOps examples
 
 ## Development
 

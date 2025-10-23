@@ -25,9 +25,12 @@ mkdir -p test-data
 
 # Set up git hooks if in a git repository
 if [ -d ".git" ]; then
-    # Install pre-commit hooks
-    if command -v pre-commit &> /dev/null; then
+    # Install pre-commit hooks only if config file exists
+    if command -v pre-commit &> /dev/null && [ -f ".pre-commit-config.yaml" ]; then
         pre-commit install --install-hooks
+        echo "✓ Pre-commit hooks installed"
+    elif command -v pre-commit &> /dev/null; then
+        echo "⚠ Pre-commit available but no .pre-commit-config.yaml found - skipping hook installation"
     fi
 fi
 

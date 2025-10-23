@@ -10,6 +10,7 @@ pub struct Config {
     pub s3_region: Option<String>,
     pub s3_endpoint: Option<String>,
     pub github_token: Option<String>,
+    pub azure_devops_token: Option<String>,
 }
 
 impl Default for Config {
@@ -21,6 +22,7 @@ impl Default for Config {
             s3_region: None,
             s3_endpoint: None,
             github_token: std::env::var("GITHUB_TOKEN").ok(),
+            azure_devops_token: std::env::var("AZURE_DEVOPS_TOKEN").ok(),
         }
     }
 }

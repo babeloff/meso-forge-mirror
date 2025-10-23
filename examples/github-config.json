@@ -1,0 +1,17 @@
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "github_token": "ghp_your_github_personal_access_token_here",
+  "s3_region": "us-west-2",
+  "s3_endpoint": null,
+  "_comment_github_token": "Get your token from https://github.com/settings/tokens with 'actions:read' scope",
+  "_comment_usage": "Use with: meso-forge-mirror mirror --src-type github --src owner/repo --config github-config.json",
+  "_example_commands": {
+    "info": "meso-forge-mirror info --github conda-forge/my-feedstock --config github-config.json",
+    "mirror_to_cache": "meso-forge-mirror mirror --src-type github --src owner/repo --tgt-type cache --config github-config.json",
+    "mirror_to_local": "meso-forge-mirror mirror --src-type github --src owner/repo --tgt-type local --tgt ./conda-repo --config github-config.json",
+    "mirror_with_filter": "meso-forge-mirror mirror --src-type github --src owner/repo --src-path 'conda.*linux.*' --config github-config.json",
+    "mirror_specific_artifact": "meso-forge-mirror mirror --src-type github --src owner/repo#123456789 --config github-config.json"
+  }
+}

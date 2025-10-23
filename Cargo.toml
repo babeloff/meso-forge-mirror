@@ -12,31 +12,34 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.41", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
+comfy-table = "7.1"
 anyhow = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2.5"
 futures = "0.3"
-bytes = "1.7"
-aws-sdk-s3 = { version = "1.50", features = ["behavior-version-latest"], default-features = false }
-aws-config = { version = "1.5", features = ["behavior-version-latest"], default-features = false }
+bytes = "1.8"
+aws-sdk-s3 = { version = "1.108", features = ["behavior-version-latest"], default-features = false }
+aws-config = { version = "1.8", features = ["behavior-version-latest"], default-features = false }
 
 # Rattler crates for conda ecosystem integration
-rattler_conda_types = "0.27"
-rattler_package_streaming = "0.22"
-rattler_virtual_packages = "0.19"
+rattler_conda_types = "0.40"
+rattler_package_streaming = "0.23"
+rattler_virtual_packages = "2.2"
+rattler_cache = "0.3"
 sha2 = "0.10"
 md-5 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
-zip = "0.6"
+zip = "6.0"
 tar = "0.4"
 flate2 = "1.0"
-regex = "1.10"
+regex = "1.11"
+tempfile = "3.14"
 
 [dev-dependencies]
-tempfile = "3.10"

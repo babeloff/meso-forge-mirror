@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
+use rattler_cache::package_cache::PackageCache;
 use rattler_conda_types::Platform;
 use std::path::Path;
 use tracing::{info, warn};
@@ -11,6 +12,7 @@ pub enum RepositoryType {
     PrefixDev,
     S3,
     Local,
+    Cache,
 }
 
 impl RepositoryType {
@@ -19,6 +21,7 @@ impl RepositoryType {
             "prefix-dev" | "prefix" => Ok(RepositoryType::PrefixDev),
             "s3" | "minio" => Ok(RepositoryType::S3),
             "local" | "file" => Ok(RepositoryType::Local),
+            "cache" => Ok(RepositoryType::Cache),
             _ => Err(anyhow!("Unknown repository type: {}", s)),
         }
     }
@@ -28,24 +31,40 @@ pub struct Repository {
     pub repo_type: RepositoryType,
     pub path: String,
     conda_handler: CondaPackageHandler,
+    #[allow(dead_code)]
+    package_cache: Option<PackageCache>,
 }
 
 impl Clone for Repository {
     fn clone(&self) -> Self {
+        let package_cache = if matches!(self.repo_type, RepositoryType::Cache) {
+            Some(PackageCache::new(&self.path))
+        } else {
+            None
+        };
+
         Self {
             repo_type: self.repo_type.clone(),
             path: self.path.clone(),
             conda_handler: CondaPackageHandler::new(),
+            package_cache,
         }
     }
 }
 
 impl Repository {
     pub fn new(repo_type: RepositoryType, path: String) -> Self {
+        let package_cache = if matches!(repo_type, RepositoryType::Cache) {
+            Some(PackageCache::new(&path))
+        } else {
+            None
+        };
+
         Self {
             repo_type,
             path,
             conda_handler: CondaPackageHandler::new(),
+            package_cache,
         }
     }
 
@@ -65,6 +84,7 @@ impl Repository {
             RepositoryType::PrefixDev => {
                 self.upload_prefix_dev_structured(&processed_package).await
             }
+            RepositoryType::Cache => self.upload_cache(&processed_package).await,
         }
     }
 
@@ -285,6 +305,10 @@ impl Repository {
                     }
                 }
             }
+            RepositoryType::Cache => {
+                // Cache doesn't need repository finalization - packages are stored individually
+                info!("Cache repositories don't require repodata generation - packages are cached individually");
+            }
             RepositoryType::S3 => {
                 // For S3, repodata is updated per package upload
                 info!("S3 repositories update repodata per upload");
@@ -297,6 +321,32 @@ impl Repository {
 
         let stats = self.get_package_stats();
         stats.print_summary();
+
+        Ok(())
+    }
+
+    async fn upload_cache(&mut self, package: &ProcessedPackage) -> Result<()> {
+        info!(
+            "Caching package {} in cache directory at {}",
+            package.filename, self.path
+        );
+
+        // For cache, we don't create repository structures
+        // Instead, we would use PackageCache to store the individual package
+        // However, PackageCache expects to fetch packages, not store already processed ones
+        // So for now, we'll store the package file directly in the cache structure
+
+        let cache_dir = Path::new(&self.path);
+        std::fs::create_dir_all(cache_dir)?;
+
+        // Store package file directly in cache
+        let package_path = cache_dir.join(&package.filename);
+        std::fs::write(&package_path, &package.content)?;
+
+        info!(
+            "Package {} cached successfully at {:?}",
+            package.filename, package_path
+        );
 
         Ok(())
     }
@@ -332,6 +382,10 @@ mod tests {
             RepositoryType::from_string("file").unwrap(),
             RepositoryType::Local
         ));
+        assert!(matches!(
+            RepositoryType::from_string("cache").unwrap(),
+            RepositoryType::Cache
+        ));
         assert!(RepositoryType::from_string("invalid").is_err());
     }
 
@@ -340,5 +394,16 @@ mod tests {
         let repo = Repository::new(RepositoryType::Local, "/tmp/test".to_string());
         assert!(matches!(repo.repo_type, RepositoryType::Local));
         assert_eq!(repo.path, "/tmp/test");
+    }
+
+    #[test]
+    fn test_cache_repository_has_package_cache() {
+        let cache_repo = Repository::new(RepositoryType::Cache, "/tmp/cache".to_string());
+        assert!(matches!(cache_repo.repo_type, RepositoryType::Cache));
+        assert!(cache_repo.package_cache.is_some());
+
+        let local_repo = Repository::new(RepositoryType::Local, "/tmp/local".to_string());
+        assert!(matches!(local_repo.repo_type, RepositoryType::Local));
+        assert!(local_repo.package_cache.is_none());
     }
 }

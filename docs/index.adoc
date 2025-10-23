@@ -29,6 +29,12 @@ New to Meso Forge Mirror? Start here:
 |link:operator-guide.adoc[Operator Guide]
 |Complete installation, configuration, and usage guide for operators and end users
 
+|link:chapters/github-integration.adoc[GitHub Integration]
+|Complete guide to using GitHub Actions artifacts as a source for conda packages
+
+|link:chapters/azure-devops-integration.adoc[Azure DevOps Integration]
+|Complete guide to using Azure DevOps build artifacts as a source for conda packages
+
 |link:pixi-tasks-guide.adoc[Pixi Tasks Guide]
 |Comprehensive guide to development, testing, and packaging tasks using pixi
 
@@ -110,9 +116,30 @@ nu scripts/test.nu all
 
 * **Enhanced Conda Package Processing**: Full integration with rattler ecosystem
 * **Multi-Target Support**: Local, S3/MinIO, and prefix.dev repositories
+* **GitHub Integration**: Download conda packages from GitHub Actions artifacts
+* **Azure DevOps Integration**: Download conda packages from Azure DevOps build artifacts
 * **Platform-Aware Organization**: Automatic platform-specific organization
 * **Integrity Verification**: MD5 and SHA256 checksum validation
 * **Concurrent Operations**: Configurable parallel downloads with retry logic
+
+=== Source Types
+
+[cols="1,3,2"]
+|===
+|Type |Description |Use Cases
+
+|GitHub
+|GitHub Actions artifacts with conda packages
+|CI/CD pipelines, PR validation, conda-forge workflows
+
+|Azure DevOps
+|Azure DevOps build artifacts with conda packages
+|Enterprise CI/CD, conda-forge build system
+
+|Local/URL
+|Local files or remote URLs
+|Development, testing, manual package processing
+|===
 
 === Target Repository Types
 
@@ -209,7 +236,10 @@ Key environment variables for development:
 |Logging level control (`debug`, `info`, `warn`, `error`)
 
 |`GITHUB_TOKEN`
-|GitHub API access for fetching staged recipes
+|GitHub API access for GitHub Actions artifacts
+
+|`AZURE_DEVOPS_TOKEN`
+|Azure DevOps Personal Access Token for build artifacts
 
 |`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
 |S3/MinIO authentication
@@ -234,6 +264,35 @@ pixi run watch               # Continuous development
 pixi run conda-build         # Build conda package
 pixi run conda-test-local    # Test installation
 pixi run conda-verify        # Verify integrity
+----
+
+=== GitHub Artifacts Workflow
+[source,bash]
+----
+# Discover artifacts from a repository
+meso-forge-mirror info --github conda-forge/numpy-feedstock
+
+# Mirror conda packages from GitHub artifacts
+meso-forge-mirror mirror \
+  --src-type github \
+  --src conda-forge/numpy-feedstock \
+  --src-path "conda.*" \
+  --tgt-type local \
+  --tgt ./conda-packages
+----
+
+=== Azure DevOps Workflow
+[source,bash]
+----
+# List recent builds
+meso-forge-mirror info --azure conda-forge/feedstock-builds
+
+# Mirror from specific build
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-path "conda.*packages.*" \
+  --tgt-type cache
 ----
 
 === Release Preparation

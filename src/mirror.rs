@@ -9,7 +9,9 @@ use tar::Archive;
 use tracing::{error, info, warn};
 use url::Url;
 
+use crate::azure;
 use crate::config::Config;
+use crate::github;
 use crate::repository::{Repository, RepositoryType};
 
 pub async fn mirror_packages(
@@ -50,6 +52,14 @@ pub async fn mirror_packages(
             return mirror_from_tarball(&client, source, is_local_file, &mut repository, config)
                 .await;
         }
+        "github" => {
+            info!("Processing GitHub artifact source: {} (type: {})", source, source_type);
+            return mirror_from_github(&client, source, zip_path, &mut repository, config).await;
+        }
+        "azure" => {
+            info!("Processing Azure DevOps artifact source: {} (type: {})", source, source_type);
+            return mirror_from_azure(&client, source, zip_path, &mut repository, config).await;
+        }
         "local" | "url" => {
             info!(
                 "Starting mirroring of single package: {} (type: {})",
@@ -70,12 +80,10 @@ pub async fn mirror_packages(
                 }
             }
         }
-        _ => {
-            return Err(anyhow::anyhow!(
-                "Unsupported source type: {}. Must be one of: zip, zip-url, local, url, tgz, tgz-url",
-                source_type
-            ));
-        }
+        _ => Err(anyhow::anyhow!(
+            "Unsupported source type: {}. Must be one of: zip, zip-url, local, url, tgz, tgz-url, github, azure",
+            source_type
+        )),
     }
 }
 
@@ -503,6 +511,237 @@ pub async fn resolve_github_pr_artifacts(pr_url: &str, config: &Config) -> Resul
     // For now, return empty list as placeholder
     warn!("GitHub artifact resolution is not fully implemented yet");
     Ok(vec![])
+}
+
+async fn mirror_from_github(
+    client: &Client,
+    source: &str,
+    name_filter: Option<&str>,
+    repository: &mut Repository,
+    config: &Config,
+) -> Result<()> {
+    info!("Starting GitHub artifact mirroring from: {}", source);
+
+    // Parse GitHub repository
+    let (owner, repo) = github::parse_github_repository(source)?;
+    info!("Parsed GitHub repository: {}/{}", owner, repo);
+
+    // Create GitHub client
+    let github_client = github::GitHubClient::new(config)?;
+
+    // Handle specific artifact ID or list artifacts
+    let artifacts = if let Some(artifact_id_str) = source.split('#').nth(1) {
+        // Handle specific artifact by ID (format: owner/repo#artifact_id)
+        let artifact_id = github::parse_artifact_id(artifact_id_str)?;
+        info!("Downloading specific artifact ID: {}", artifact_id);
+
+        let artifact = github_client
+            .get_artifact(&owner, &repo, artifact_id)
+            .await?;
+        vec![artifact]
+    } else {
+        // List all artifacts and optionally filter
+        let mut artifacts = github_client.list_artifacts(&owner, &repo).await?;
+
+        // Filter by name if specified
+        if let Some(pattern) = name_filter {
+            artifacts = github_client.filter_artifacts_by_name(&artifacts, Some(pattern));
+        }
+
+        // Filter out expired artifacts
+        artifacts = github_client.filter_non_expired_artifacts(&artifacts);
+
+        if artifacts.is_empty() {
+            return Err(anyhow!("No artifacts found matching the criteria"));
+        }
+
+        // For mirroring, we might want to process all or ask user to specify
+        // For now, let's process the first one or all if there's a name filter
+        if name_filter.is_none() && artifacts.len() > 1 {
+            warn!(
+                "Multiple artifacts found ({}) but no name filter specified. Processing the most recent one.",
+                artifacts.len()
+            );
+            // Sort by creation date and take the most recent
+            artifacts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            vec![artifacts.into_iter().next().unwrap()]
+        } else {
+            artifacts
+        }
+    };
+
+    // Process each selected artifact
+    for artifact in artifacts {
+        info!(
+            "Processing artifact '{}' (ID: {}, Size: {} bytes)",
+            artifact.name, artifact.id, artifact.size_in_bytes
+        );
+
+        if artifact.expired {
+            warn!("Artifact '{}' has expired, skipping", artifact.name);
+            continue;
+        }
+
+        // Download the artifact (it comes as a ZIP file)
+        let artifact_content = github_client
+            .download_artifact(&owner, &repo, artifact.id)
+            .await?;
+
+        // Save to temporary file and process as ZIP
+        let temp_dir = tempfile::TempDir::new()?;
+        let temp_zip_path = temp_dir.path().join(format!("{}.zip", artifact.name));
+        std::fs::write(&temp_zip_path, artifact_content)?;
+
+        info!("Downloaded artifact to temporary file: {:?}", temp_zip_path);
+
+        // Process the ZIP file - look for conda packages
+        let zip_path_pattern = name_filter.unwrap_or(r".*\.conda$|.*\.tar\.bz2$");
+
+        mirror_from_zip(
+            client,
+            temp_zip_path.to_str().unwrap(),
+            zip_path_pattern,
+            true, // is_local_file = true since we downloaded it locally
+            repository,
+            config,
+        )
+        .await?;
+    }
+
+    info!("GitHub artifact mirroring completed");
+    Ok(())
+}
+
+async fn mirror_from_azure(
+    client: &Client,
+    source: &str,
+    name_filter: Option<&str>,
+    repository: &mut Repository,
+    config: &Config,
+) -> Result<()> {
+    info!("Starting Azure DevOps artifact mirroring from: {}", source);
+
+    // Parse Azure DevOps organization/project/build_id
+    let (organization, project, build_id) = azure::parse_azure_source(source)?;
+    info!("Parsed Azure DevOps: {}/{}", organization, project);
+
+    // Create Azure DevOps client
+    let azure_client = azure::AzureDevOpsClient::new(config)?;
+
+    // Handle specific build ID or list recent builds
+    let builds_and_artifacts = if let Some(build_id) = build_id {
+        info!("Processing specific build ID: {}", build_id);
+        let artifacts = azure_client
+            .list_artifacts(&organization, &project, build_id)
+            .await?;
+        vec![(build_id, artifacts)]
+    } else {
+        // List recent builds and get their artifacts
+        let builds = azure_client
+            .list_builds(&organization, &project, None)
+            .await?;
+
+        if builds.is_empty() {
+            return Err(anyhow!("No builds found for {}/{}", organization, project));
+        }
+
+        // For mirroring, we might want to process all recent successful builds
+        // or just the most recent one if no name filter is specified
+        let builds_to_process = if name_filter.is_none() && builds.len() > 1 {
+            warn!(
+                "Multiple builds found ({}) but no name filter specified. Processing the most recent successful build.",
+                builds.len()
+            );
+            // Filter for successful builds and take the most recent
+            let mut successful_builds: Vec<_> = builds
+                .into_iter()
+                .filter(|b| b.result.as_deref() == Some("succeeded"))
+                .collect();
+            successful_builds.sort_by(|a, b| b.id.cmp(&a.id));
+            successful_builds.into_iter().take(1).collect()
+        } else {
+            builds
+        };
+
+        let mut builds_and_artifacts = Vec::new();
+        for build in builds_to_process {
+            info!("Getting artifacts for build {}", build.id);
+            let artifacts = azure_client
+                .list_artifacts(&organization, &project, build.id)
+                .await?;
+            builds_and_artifacts.push((build.id, artifacts));
+        }
+        builds_and_artifacts
+    };
+
+    // Process each build's artifacts
+    for (build_id, artifacts) in builds_and_artifacts {
+        let mut filtered_artifacts = artifacts;
+
+        // Filter by name if specified
+        if let Some(pattern) = name_filter {
+            filtered_artifacts =
+                azure_client.filter_artifacts_by_name(&filtered_artifacts, Some(pattern));
+        }
+
+        // Filter for downloadable artifacts (those with download URLs or specific types)
+        let downloadable_artifacts: Vec<_> = filtered_artifacts
+            .into_iter()
+            .filter(|artifact| {
+                // Prefer artifacts that can be downloaded as files
+                artifact
+                    .resource
+                    .artifact_type
+                    .eq_ignore_ascii_case("Container")
+                    || artifact
+                        .resource
+                        .artifact_type
+                        .eq_ignore_ascii_case("FilePath")
+                    || artifact.resource.download_url.is_some()
+            })
+            .collect();
+
+        if downloadable_artifacts.is_empty() {
+            warn!("No downloadable artifacts found for build {}", build_id);
+            continue;
+        }
+
+        // Process each downloadable artifact
+        for artifact in downloadable_artifacts {
+            info!(
+                "Processing artifact '{}' (ID: {}, Type: {}) from build {}",
+                artifact.name, artifact.id, artifact.resource.artifact_type, build_id
+            );
+
+            // Download the artifact
+            let artifact_content = azure_client
+                .download_artifact(&organization, &project, build_id, &artifact.name)
+                .await?;
+
+            // Save to temporary file and process as ZIP
+            let temp_dir = tempfile::TempDir::new()?;
+            let temp_zip_path = temp_dir.path().join(format!("{}.zip", artifact.name));
+            std::fs::write(&temp_zip_path, artifact_content)?;
+
+            info!("Downloaded artifact to temporary file: {:?}", temp_zip_path);
+
+            // Process the ZIP file - look for conda packages
+            let zip_path_pattern = name_filter.unwrap_or(r".*\.conda$|.*\.tar\.bz2$");
+
+            mirror_from_zip(
+                client,
+                temp_zip_path.to_str().unwrap(),
+                zip_path_pattern,
+                true, // is_local_file = true since we downloaded it locally
+                repository,
+                config,
+            )
+            .await?;
+        }
+    }
+
+    info!("Azure DevOps artifact mirroring completed");
+    Ok(())
 }
 
 #[cfg(test)]

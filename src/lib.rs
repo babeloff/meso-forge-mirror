@@ -4,8 +4,10 @@
 //! This library provides enhanced functionality through integration with the rattler ecosystem
 //! for proper conda package handling, validation, and repository structure management.
 
+pub mod azure;
 pub mod conda_package;
 pub mod config;
+pub mod github;
 pub mod mirror;
 pub mod repository;
 
@@ -201,7 +203,6 @@ mod integration_tests {
     }
 }
 
-/// Example usage and documentation
 pub mod examples {
     //! # Usage Examples
     //!
@@ -255,5 +256,4 @@ pub mod examples {
     //!
     //!     Ok(())
     //! }
-    //! ```
 }

@@ -1,0 +1,24 @@
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "github_token": null,
+  "azure_devops_token": "your_azure_devops_personal_access_token_here",
+  "s3_region": "us-west-2",
+  "s3_endpoint": null,
+  "_comment_azure_token": "Get your PAT from https://dev.azure.com/ → Security → Personal Access Tokens with 'Build (read)' and 'Artifact (read)' scopes",
+  "_comment_usage": "Use with: meso-forge-mirror mirror --src-type azure --src org/project#build_id --config azure-config.json",
+  "_example_commands": {
+    "info_builds": "meso-forge-mirror info --azure conda-forge/feedstock-builds --config azure-config.json",
+    "info_artifacts": "meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331 --config azure-config.json",
+    "mirror_to_cache": "meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds#1374331 --tgt-type cache --config azure-config.json",
+    "mirror_to_local": "meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds#1374331 --tgt-type local --tgt ./conda-repo --config azure-config.json",
+    "mirror_with_filter": "meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds#1374331 --src-path 'conda.*packages.*' --config azure-config.json",
+    "mirror_latest_successful": "meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds --src-path 'conda.*' --config azure-config.json"
+  },
+  "_conda_forge_examples": {
+    "pr_31205_info": "meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331",
+    "pr_31205_artifacts": "meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331 --name-filter 'conda.*'",
+    "pr_31205_mirror": "meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds#1374331 --src-path 'conda.*packages.*' --tgt-type local --tgt ./pr-31205-packages"
+  }
+}

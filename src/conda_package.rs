@@ -155,7 +155,7 @@ impl CondaPackageHandler {
         // Extract build number from build string
         let build_number = build
             .split('_')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
 
@@ -254,7 +254,7 @@ impl CondaPackageHandler {
 
         for package in self.cache.values() {
             organized
-                .entry(package.platform.clone())
+                .entry(package.platform)
                 .or_default()
                 .push(package.clone());
         }
@@ -353,7 +353,7 @@ impl CondaPackageHandler {
             stats.total_size += package.size;
             *stats
                 .packages_by_platform
-                .entry(package.platform.clone())
+                .entry(package.platform)
                 .or_insert(0) += 1;
         }
 

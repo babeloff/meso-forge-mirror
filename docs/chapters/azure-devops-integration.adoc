@@ -1,0 +1,445 @@
+= Azure DevOps Integration
+:toc:
+:toclevels: 3
+:sectlinks:
+:sectanchors:
+
+This chapter describes the Azure DevOps integration functionality for meso-forge-mirror,
+enabling the tool to download conda packages from Azure DevOps build artifacts.
+
+== Overview
+
+The tool supports `--src-type azure` for downloading conda packages
+from Azure DevOps build artifacts,
+along with enhanced `info` command capabilities
+to discover builds and artifacts in Azure DevOps projects.
+
+Key features include:
+
+* Build discovery and listing
+* Artifact discovery for specific builds
+* Pattern-based artifact filtering
+* Support for multiple Azure DevOps URL formats
+* Integration with all existing target types
+
+== Authentication
+
+Azure DevOps API access requires authentication
+using a Personal Access Token (PAT) with appropriate permissions.
+
+=== Creating an Azure DevOps PAT
+
+. Go to https://dev.azure.com/
+. Click on your profile → Security → Personal Access Tokens
+. Create a new token with the following scopes:
+  * **Build (read)** - to read build information
+  * **Artifact (read)** - to download build artifacts
+
+=== Setting up Authentication
+
+[source,bash]
+----
+export AZURE_DEVOPS_TOKEN=your_pat_token_here
+----
+
+Alternatively, provide it in a configuration file:
+
+[source,json]
+----
+{
+  "azure_devops_token": "your_pat_token_here",
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300
+}
+----
+
+== Info Command
+
+The `info` command can query Azure DevOps projects and builds.
+
+=== List Recent Builds
+
+[source,bash]
+----
+# List recent builds for a project
+meso-forge-mirror info --azure conda-forge/feedstock-builds
+
+# Using Azure DevOps URL format
+meso-forge-mirror info --azure https://dev.azure.com/conda-forge/feedstock-builds
+----
+
+=== List Artifacts for a Specific Build
+
+[source,bash]
+----
+# List artifacts for a specific build ID
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+
+# Filter artifacts by name pattern
+meso-forge-mirror info \
+  --azure conda-forge/feedstock-builds \
+  --build-id 1374331 \
+  --name-filter "conda.*"
+----
+
+=== Example Output - Builds
+
+----
+Found 10 builds:
+--------------------------------------------------------------------------------------------------------------------------------------------
+Build ID     Build Number         Status          Result          Definition                Source Branch                  Finish Time
+--------------------------------------------------------------------------------------------------------------------------------------------
+1374331      20241023.1          completed       succeeded       staged-recipes           refs/pull/31205/merge          2024-10-23 16:30 UTC
+1374330      20241023.2          completed       succeeded       staged-recipes           refs/heads/main                2024-10-23 15:45 UTC
+1374329      20241023.3          completed       failed          staged-recipes           refs/pull/31204/merge          2024-10-23 14:20 UTC
+...
+----
+
+=== Example Output - Artifacts
+
+----
+Found 3 artifacts:
+------------------------------------------------------------------------------------------------------------------------
+ID           Name                           Type            Size            Source     Download Available
+------------------------------------------------------------------------------------------------------------------------
+123456       conda-packages-linux-64        Container       2.5M            build      Yes
+123457       conda-packages-osx-64          Container       2.1M            build      Yes
+123458       test-results                   FilePath        500K            build      No
+------------------------------------------------------------------------------------------------------------------------
+----
+
+== Mirror Command
+
+The `mirror` command can use Azure DevOps artifacts as a source for conda package mirroring.
+
+=== Basic Azure DevOps Mirroring
+
+[source,bash]
+----
+# Mirror from most recent successful build
+meso-forge-mirror mirror --src-type azure --src conda-forge/feedstock-builds
+
+# Mirror from specific build ID
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331
+
+# Mirror to local conda repository
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --tgt-type local \
+  --tgt /path/to/conda/repo
+----
+
+=== Filtering Artifacts
+
+[source,bash]
+----
+# Filter by artifact name pattern
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-path "conda.*linux.*" \
+  --tgt-type cache
+
+# Process all conda package artifacts from recent builds
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds \
+  --src-path "conda.*packages.*" \
+  --tgt-type local \
+  --tgt ./conda-repo
+----
+
+== conda-forge Specific Usage
+
+For the conda-forge use case,
+this section provides specific workflows
+for working with conda-forge's Azure DevOps environment.
+
+=== Discovering Artifacts from a Specific PR
+
+[source,bash]
+----
+# First, find the build ID for PR #31205 from the web interface or by listing builds
+meso-forge-mirror info --azure conda-forge/feedstock-builds
+
+# Then list artifacts for that specific build
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+
+# Mirror the conda packages from that PR build
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-path "conda.*" \
+  --tgt-type cache
+----
+
+=== Complete Workflow Example
+
+[source,bash]
+----
+# Step 1: Set up authentication
+export AZURE_DEVOPS_TOKEN=your_pat_token
+
+# Step 2: Find the build you're interested in
+meso-forge-mirror info --azure conda-forge/feedstock-builds | grep "31205"
+
+# Step 3: List artifacts for that build (assuming build ID 1374331)
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+
+# Step 4: Mirror the conda packages
+meso-forge-mirror mirror \
+  --src-type azure \
+  --src conda-forge/feedstock-builds#1374331 \
+  --src-path "conda.*packages.*" \
+  --tgt-type local \
+  --tgt ./pr-31205-packages
+
+# The result is conda packages from PR #31205 in ./pr-31205-packages/
+----
+
+== Configuration
+
+=== Configuration File Example
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "github_token": null,
+  "azure_devops_token": "your_azure_devops_pat_here",
+  "s3_region": "us-west-2",
+  "s3_endpoint": null
+}
+----
+
+== Technical Details
+
+=== How It Works
+
+The Azure DevOps integration follows this workflow:
+
+. **Authentication**: Uses Personal Access Token for Azure DevOps API access
+. **Build Discovery**: Lists recent builds or targets specific build ID
+. **Artifact Discovery**: Lists artifacts for selected builds
+. **Filtering**: Artifacts are filtered by name pattern and type
+. **Download**: Selected artifacts are downloaded as ZIP files
+. **Extraction**: ZIP files are processed
+  to find conda packages (`.conda` or `.tar.bz2` files)
+. **Mirroring**: Found conda packages are processed
+  and uploaded to the target repository
+
+=== Supported Azure DevOps Artifact Types
+
+The Azure DevOps integration prioritizes downloadable artifact types:
+
+* **Container** artifacts (most common for build outputs)
+* **FilePath** artifacts
+* Any artifact with a direct download URL
+
+=== Azure DevOps API Usage
+
+* Uses Azure DevOps REST API version 6.0
+* **List Builds**: `GET /{organization}/{project}/_apis/build/builds`
+* **List Artifacts**: `GET /{organization}/{project}/_apis/build/builds/{buildId}/artifacts`
+* **Download Artifact**: `GET /{organization}/{project}/_apis/build/builds/{buildId}/artifacts`
+
+== Repository and Build Formats
+
+=== Supported Formats
+
+[source,bash]
+----
+# Organization/project format
+conda-forge/feedstock-builds
+
+# Azure DevOps URL format
+https://dev.azure.com/conda-forge/feedstock-builds
+
+# With specific build ID
+conda-forge/feedstock-builds#1374331
+https://dev.azure.com/conda-forge/feedstock-builds#1374331
+----
+
+=== Finding Build IDs
+
+Build IDs can be found:
+
+. **Web Interface**: Visit https://dev.azure.com/{org}/{project}/_build
+. **Info Command**: Use `meso-forge-mirror info --azure {org}/{project}`
+. **Build URLs**: Extract from Azure DevOps build result URLs
+
+== Error Handling
+
+=== Common Errors and Solutions
+
+==== Authentication Errors
+
+----
+Error: Failed to list Azure DevOps builds: 401 - Unauthorized
+----
+
+*Solution*: Check your Azure DevOps PAT is valid and has Build (read) permissions.
+
+==== Project Not Found
+
+----
+Error: Failed to list Azure DevOps builds: 404 - Not Found
+----
+
+*Solution*: Verify the organization and project names are correct and your PAT has access.
+
+==== No Artifacts Found
+
+----
+Error: No downloadable artifacts found for build 1374331
+----
+
+*Solution*: Check if the build has completed successfully
+   and has artifacts in the web interface.
+
+==== Build Not Found
+
+----
+Error: Failed to list Azure DevOps artifacts: 404 - Build not found
+----
+
+*Solution*: Verify the build ID exists and hasn't been deleted due to retention policies.
+
+== Performance Considerations
+
+=== Rate Limiting
+
+* Azure DevOps has generous rate limits for authenticated requests
+* The tool respects standard HTTP retry patterns
+* Concurrent downloads are supported (configurable via `max_concurrent_downloads`)
+* Artifacts are cached locally during processing to avoid re-downloads
+
+== Integration with Existing Features
+
+The Azure DevOps integration works seamlessly with all existing target types:
+
+* **Cache**: Store individual packages in rattler cache
+* **Local**: Create local conda repository with repodata
+* **S3**: Upload to S3-based conda repositories
+* **Prefix.dev**: Upload to prefix.dev channels
+
+== Comparison with GitHub Integration
+
+[cols="1,1,1"]
+|===
+|Feature |GitHub Actions |Azure DevOps
+
+|Authentication
+|GitHub Token
+|Personal Access Token
+
+|Build Discovery
+|Repository-level artifacts
+|Project builds + artifacts
+
+|URL Format
+|`owner/repo`
+|`organization/project`
+
+|Artifact Types
+|ZIP downloads
+|Container, FilePath, etc.
+
+|Expiration
+|90 days default
+|Configurable retention
+|===
+
+== Advanced Examples
+
+=== CI/CD Pipeline Integration
+
+[source,bash]
+----
+#!/bin/bash
+# Download and process conda packages from Azure DevOps in CI
+
+set -e
+
+# Configuration
+ORG="conda-forge"
+PROJECT="feedstock-builds"
+BUILD_ID="${AZURE_BUILD_ID:-latest}"  # From environment or use latest
+
+# Set up authentication
+export AZURE_DEVOPS_TOKEN="${AZURE_PAT_TOKEN}"
+
+# Find the latest successful build if BUILD_ID is "latest"
+if [ "$BUILD_ID" = "latest" ]; then
+    echo "Finding latest successful build..."
+    # This would require additional logic to parse the info command output
+    BUILD_ID=$(meso-forge-mirror info --azure $ORG/$PROJECT | grep succeeded | head -1 | awk '{print $1}')
+fi
+
+echo "Processing build $BUILD_ID from $ORG/$PROJECT"
+
+# Mirror conda packages
+meso-forge-mirror mirror \
+    --src-type azure \
+    --src "$ORG/$PROJECT#$BUILD_ID" \
+    --src-path "conda.*packages.*" \
+    --tgt-type s3 \
+    --tgt "s3://my-conda-channel/builds/$BUILD_ID" \
+    --config azure-config.json
+
+echo "Packages available at s3://my-conda-channel/builds/$BUILD_ID"
+----
+
+=== Multi-Build Processing
+
+[source,bash]
+----
+# Process artifacts from multiple recent builds
+builds=(1374331 1374330 1374329)
+
+for build_id in "${builds[@]}"; do
+    echo "Processing build $build_id..."
+    meso-forge-mirror mirror \
+        --src-type azure \
+        --src conda-forge/feedstock-builds#$build_id \
+        --src-path "conda.*" \
+        --tgt-type local \
+        --tgt ./aggregated-builds/$build_id
+done
+----
+
+== Troubleshooting
+
+=== Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+[source,bash]
+----
+RUST_LOG=debug meso-forge-mirror info --azure conda-forge/feedstock-builds
+----
+
+=== Test Connectivity
+
+Test with a simple command:
+
+[source,bash]
+----
+# Test authentication and basic connectivity
+meso-forge-mirror info --azure conda-forge/feedstock-builds --build-id 1374331
+----
+
+=== Validate Configuration
+
+[source,bash]
+----
+# Create and check default config
+meso-forge-mirror init --output azure-test-config.json
+cat azure-test-config.json
+----

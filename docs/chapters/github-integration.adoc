@@ -1,0 +1,308 @@
+= GitHub Integration
+:toc:
+:toclevels: 3
+:sectlinks:
+:sectanchors:
+
+This chapter describes the GitHub Artifacts integration functionality for meso-forge-mirror,
+enabling the tool to download conda packages from GitHub Actions artifacts.
+
+== Overview
+
+The tool supports `--src-type github` for downloading conda packages from GitHub Actions artifacts,
+along with an `info` command to discover artifacts in repositories.
+
+Key features include:
+
+* Repository artifact discovery and listing
+* Pattern-based artifact filtering
+* Expiration status filtering
+* Support for multiple repository URL formats
+* Integration with all existing target types
+
+== Authentication
+
+GitHub API access requires authentication for private repositories and to avoid rate limiting.
+
+=== Setting up GitHub Token
+
+[source,bash]
+----
+export GITHUB_TOKEN=ghp_your_token_here
+----
+
+Alternatively, provide it in a configuration file:
+
+[source,json]
+----
+{
+  "github_token": "ghp_your_token_here",
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300
+}
+----
+
+Then use the configuration file:
+
+[source,bash]
+----
+meso-forge-mirror info --github owner/repo --config config.json
+----
+
+== Info Command
+
+The `info` command lists all artifacts for a repository, with optional filtering capabilities.
+
+=== Basic Usage
+
+[source,bash]
+----
+# List all artifacts for a repository
+meso-forge-mirror info --github owner/repository
+
+# Using GitHub URL format
+meso-forge-mirror info --github https://github.com/owner/repository
+----
+
+=== Filtering Options
+
+[source,bash]
+----
+# Filter artifacts by name pattern (regex)
+meso-forge-mirror info --github owner/repo --name-filter "conda.*linux"
+
+# Include expired artifacts
+meso-forge-mirror info --github owner/repo --exclude-expired false
+
+# Combined filtering
+meso-forge-mirror info --github owner/repo --name-filter "package.*" --exclude-expired true
+----
+
+=== Example Output
+
+----
+Found 3 artifacts:
+------------------------------------------------------------------------------------------------------------------------
+ID           Name                           Size (bytes)     Created At           Expired    Head Branch
+------------------------------------------------------------------------------------------------------------------------
+123456789    conda-packages-linux-64        2.5M             2024-01-15 14:30 UTC No         feature/new-package
+123456788    conda-packages-osx-64          2.1M             2024-01-15 14:28 UTC No         feature/new-package
+123456787    test-results                   500K             2024-01-15 14:25 UTC No         feature/new-package
+------------------------------------------------------------------------------------------------------------------------
+----
+
+== Mirror Command
+
+The `mirror` command can use GitHub artifacts as a source for conda package mirroring.
+
+=== Basic GitHub Mirroring
+
+[source,bash]
+----
+# Mirror from GitHub artifacts (processes most recent non-expired artifact)
+meso-forge-mirror mirror --src-type github --src owner/repository
+
+# Mirror to local conda repository
+meso-forge-mirror mirror \
+  --src-type github \
+  --src owner/repository \
+  --tgt-type local \
+  --tgt /path/to/conda/repo
+
+# Mirror to S3
+meso-forge-mirror mirror \
+  --src-type github \
+  --src owner/repository \
+  --tgt-type s3 \
+  --tgt s3://my-bucket/conda-repo
+----
+
+=== Filtering Artifacts
+
+[source,bash]
+----
+# Filter by artifact name pattern
+meso-forge-mirror mirror \
+  --src-type github \
+  --src owner/repository \
+  --src-path "conda.*linux.*" \
+  --tgt-type cache
+
+# Process specific artifact by ID
+meso-forge-mirror mirror \
+  --src-type github \
+  --src owner/repository#123456789 \
+  --tgt-type cache
+----
+
+=== Advanced Examples
+
+[source,bash]
+----
+# Mirror conda packages from a specific PR build
+meso-forge-mirror mirror \
+  --src-type github \
+  --src conda-forge/my-feedstock \
+  --src-path "conda-packages.*" \
+  --tgt-type local \
+  --tgt ./local-conda-repo \
+  --config config.json
+
+# Cache artifacts for later use
+meso-forge-mirror mirror \
+  --src-type github \
+  --src myorg/myproject \
+  --src-path ".*\.conda$" \
+  --tgt-type cache
+----
+
+== Configuration
+
+=== Configuration File Example
+
+[source,json]
+----
+{
+  "max_concurrent_downloads": 5,
+  "retry_attempts": 3,
+  "timeout_seconds": 300,
+  "github_token": "ghp_your_token_here",
+  "s3_region": "us-west-2",
+  "s3_endpoint": null
+}
+----
+
+== Technical Details
+
+=== How It Works
+
+The GitHub integration follows this workflow:
+
+. **Discovery**: Uses GitHub's REST API to list artifacts for a repository
+. **Filtering**: Artifacts are filtered by name pattern and expiration status
+. **Download**: Selected artifacts are downloaded as ZIP files
+. **Extraction**: ZIP files are processed to find conda packages (`.conda` or `.tar.bz2` files)
+. **Mirroring**: Found conda packages are processed and uploaded to the target repository
+
+=== Supported Formats
+
+The GitHub integration looks for conda packages within artifact ZIP files:
+
+* `.conda` files
+* `.tar.bz2` files
+
+=== Rate Limiting
+
+* Uses GitHub API v2022-11-28
+* Respects GitHub rate limits (5000 requests/hour for authenticated users)
+* Includes proper User-Agent headers
+* Supports retry policies for transient failures
+
+== Error Handling
+
+=== Common Errors and Solutions
+
+==== Authentication Errors
+
+----
+Error: Failed to list GitHub artifacts: 401 - Bad credentials
+----
+
+*Solution*: Check your GitHub token is valid and has appropriate permissions.
+
+==== Repository Not Found
+
+----
+Error: Failed to list GitHub artifacts: 404 - Not Found
+----
+
+*Solution*: Verify the repository exists and your token has access to it.
+
+==== No Artifacts Found
+
+----
+Error: No artifacts found matching the criteria
+----
+
+*Solution*: Check if the repository has any artifacts, or adjust your name filter.
+
+==== Invalid Repository Format
+
+----
+Error: Invalid GitHub repository format. Expected 'owner/repo' or 'https://github.com/owner/repo'
+----
+
+*Solution*: Use the correct format for repository specification.
+
+== Repository Formats
+
+The GitHub integration supports multiple repository format options:
+
+[source,bash]
+----
+# All of these are equivalent:
+meso-forge-mirror info --github owner/repository
+meso-forge-mirror info --github https://github.com/owner/repository
+meso-forge-mirror info --github https://github.com/owner/repository/
+
+# Specific artifact selection:
+meso-forge-mirror mirror --src-type github --src owner/repo#123456789
+----
+
+== Integration with Existing Features
+
+The GitHub integration works seamlessly with all existing target types:
+
+* **Cache**: Store individual packages in rattler cache
+* **Local**: Create local conda repository with repodata
+* **S3**: Upload to S3-based conda repositories
+* **Prefix.dev**: Upload to prefix.dev channels
+
+== Practical Examples
+
+=== conda-forge Workflow
+
+[source,bash]
+----
+# 1. Check what artifacts are available
+meso-forge-mirror info --github conda-forge/python-feedstock --name-filter "conda.*"
+
+# 2. Mirror the conda packages to local repository
+meso-forge-mirror mirror \
+  --src-type github \
+  --src conda-forge/python-feedstock \
+  --src-path "conda.*packages.*" \
+  --tgt-type local \
+  --tgt ./my-conda-channel
+----
+
+=== CI/CD Integration
+
+[source,bash]
+----
+#!/bin/bash
+# Example CI script for processing GitHub artifacts
+
+export GITHUB_TOKEN="${CI_GITHUB_TOKEN}"
+
+# Process latest artifacts from main branch
+meso-forge-mirror mirror \
+  --src-type github \
+  --src myorg/myproject \
+  --src-path "conda.*" \
+  --tgt-type s3 \
+  --tgt s3://my-conda-channel/nightly \
+  --config github-config.json
+----
+
+=== Debug and Testing
+
+[source,bash]
+----
+# Enable debug logging
+RUST_LOG=debug meso-forge-mirror info --github owner/repo
+
+# Test connectivity with public repository
+meso-forge-mirror info --github octocat/Hello-World
+----

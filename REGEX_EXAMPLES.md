@@ -127,7 +127,7 @@ meso-forge-mirror mirror \
 
 ### Common Regex Elements
 - `^` - Start of string/path
-- `$` - End of string/path  
+- `$` - End of string/path
 - `.` - Any single character
 - `.*` - Any characters (zero or more)
 - `\.` - Literal dot (escaped)
