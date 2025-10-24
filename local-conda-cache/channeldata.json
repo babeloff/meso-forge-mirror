@@ -23,6 +23,7 @@
       "source_git_url": null,
       "source_url": null,
       "subdirs": [
+        "linux-64",
         "noarch"
       ],
       "summary": "Installer for CoreOS disk images",
@@ -72,6 +73,11 @@
     }
   },
   "subdirs": [
-    "noarch"
+    "linux-64",
+    "linux-aarch64",
+    "noarch",
+    "osx-64",
+    "osx-arm64",
+    "win-64"
   ]
 }

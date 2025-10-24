@@ -2,49 +2,19 @@
   "info": {
     "subdir": "noarch"
   },
-  "packages": {},
-  "packages.conda": {
-    "coreos-installer-0.25.0-he48fb7a_0.conda": {
-      "build": "he48fb7a_0",
+  "packages": {
+    "rb-asciidoctor-revealjs-5.2.0-h1d6dcf3_0.conda": {
+      "build": "h1d6dcf3_0",
       "build_number": 0,
-      "constrains": [
-        "__glibc >=2.17"
-      ],
-      "depends": [
-        "libstdcxx >=14",
-        "libgcc >=14",
-        "__glibc >=2.17,<3.0.a0",
-        "zstd >=1.5.7,<1.6.0a0",
-        "openssl >=3.5.4,<4.0a0",
-        "libzlib >=1.3.1,<2.0a0"
-      ],
-      "license": "Apache-2.0",
-      "md5": "0dc84d9c913297a1aa502a6f9bbe8653",
-      "name": "coreos-installer",
-      "sha256": "5a872cb1d11d615a144f9af26d61683a75aff4c51d8412e7fa72a5227ce77b67",
-      "size": 6036310,
-      "subdir": "linux-64",
-      "timestamp": 1761160191288,
-      "version": "0.25.0"
-    },
-    "zlib-1.2.13-hd590300_5.conda": {
-      "build": "hd590300_5",
-      "build_number": 5,
-      "depends": [
-        "libgcc-ng >=12",
-        "libzlib 1.2.13 hd590300_5"
-      ],
-      "license": "Zlib",
-      "license_family": "Other",
-      "md5": "68c34ec6149623be41a1933ab996a209",
-      "name": "zlib",
-      "sha256": "9887a04d7e7cb14bd2b52fa01858f05a6d7f002c890f618d9fcd864adbfecb1b",
-      "size": 92825,
-      "subdir": "linux-64",
-      "timestamp": 1686575231103,
-      "version": "1.2.13"
+      "depends": [],
+      "license": "",
+      "md5": "35175dec0be544c122ab75efee282594",
+      "name": "rb-asciidoctor-revealjs",
+      "sha256": "c807371dede506a526209b0a5558cb5ff74eadaddc7e584d99ed73674c894938",
+      "size": 10557945,
+      "subdir": "noarch",
+      "timestamp": "2025-10-24T18:39:22.556235582Z",
+      "version": "5.2.0"
     }
-  },
-  "removed": [],
-  "repodata_version": 1
+  }
 }
