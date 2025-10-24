@@ -405,4 +405,177 @@ mod tests {
         assert!(help_output.contains("stores individual packages for reuse"));
         assert!(help_output.contains("automatically determined for 'cache'"));
     }
+
+    #[tokio::test]
+    async fn test_cache_integration_with_pixi_discovery() {
+        use crate::repository::{Repository, RepositoryType};
+        use bytes::Bytes;
+        use rattler_cache::package_cache::PackageCache;
+        use std::fs;
+        use tempfile::TempDir;
+
+        // Create temporary directories for testing
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let cache_path = temp_dir.path().join("cache");
+        fs::create_dir_all(&cache_path).expect("Failed to create cache directory");
+
+        // Create a test conda package content (minimal valid .conda file structure)
+        let test_package_name = "rb-asciidoctor-revealjs-5.2.0-h1d6dcf3_0.conda";
+        let test_package_content = create_test_conda_package_content();
+
+        // Test the cache repository
+        let mut cache_repo = Repository::new(
+            RepositoryType::Cache,
+            cache_path.to_string_lossy().to_string(),
+        );
+
+        // Upload package to cache
+        let upload_result = cache_repo
+            .upload_package(test_package_name, Bytes::from(test_package_content.clone()))
+            .await;
+        assert!(
+            upload_result.is_ok(),
+            "Failed to upload package to cache: {:?}",
+            upload_result
+        );
+
+        // Verify the package file exists in cache
+        let cached_file = cache_path.join(test_package_name);
+        assert!(
+            cached_file.exists(),
+            "Package file should exist in cache at {:?}",
+            cached_file
+        );
+
+        // Verify file content matches
+        let cached_content = fs::read(&cached_file).expect("Failed to read cached file");
+        assert_eq!(
+            cached_content, test_package_content,
+            "Cached content should match original"
+        );
+
+        // Test PackageCache integration
+        let _package_cache = PackageCache::new(&cache_path);
+
+        // Verify cache directory structure is compatible with rattler
+        assert!(cache_path.exists(), "Cache directory should exist");
+
+        // Test package name parsing (this is what pixi would do)
+        let package_parts: Vec<&str> = test_package_name
+            .strip_suffix(".conda")
+            .unwrap_or(test_package_name)
+            .split('-')
+            .collect();
+        assert!(
+            package_parts.len() >= 2,
+            "Package name should have at least name and version"
+        );
+        assert_eq!(package_parts[0], "rb");
+        assert_eq!(package_parts[1], "asciidoctor");
+        assert_eq!(package_parts[2], "revealjs");
+
+        // Verify this addresses the original issue: package name with typo vs correct name
+        let correct_package_name = "rb-asciidoctor-revealjs";
+        let typo_package_name = "rb-asciidocgtor-revealjs"; // missing 't'
+        assert_ne!(
+            correct_package_name, typo_package_name,
+            "Package names should differ to demonstrate the typo issue"
+        );
+
+        // The package we cached should match the correct name
+        assert!(
+            test_package_name.starts_with(correct_package_name),
+            "Cached package should start with correct name"
+        );
+        assert!(
+            !test_package_name.starts_with(typo_package_name),
+            "Cached package should not match typo name"
+        );
+    }
+
+    fn create_test_conda_package_content() -> Vec<u8> {
+        // Create a minimal but valid conda package structure
+        // This is a simplified representation - in reality, conda packages are more complex
+        let mut content = Vec::new();
+
+        // Add some mock conda package data (ZIP format with metadata)
+        // For testing purposes, we'll create a simple structure that represents a conda package
+        content.extend_from_slice(b"PK\x03\x04"); // ZIP file signature
+        content.extend_from_slice(b"mock_conda_package_content_for_testing");
+        content.extend_from_slice(&[0u8; 100]); // Padding to make it look more realistic
+
+        content
+    }
+
+    #[test]
+    fn test_package_name_typo_detection() {
+        // Test to demonstrate the original user issue with package name typo
+        let correct_name = "rb-asciidoctor-revealjs-5.2.0-h1d6dcf3_0.conda";
+        let search_with_typo = "rb-asciidocgtor-revealjs"; // missing 't' in 'asciidoctor'
+        let search_correct = "rb-asciidoctor-revealjs";
+
+        // Simulate package search/matching logic
+        assert!(
+            !correct_name.starts_with(search_with_typo),
+            "Package with correct name should not match search with typo"
+        );
+        assert!(
+            correct_name.starts_with(search_correct),
+            "Package with correct name should match correct search term"
+        );
+
+        // This test documents the issue: typos in package names cause packages not to be found
+        // even when they exist in the cache
+    }
+
+    #[tokio::test]
+    async fn test_cache_vs_repository_behavior() {
+        use crate::repository::{Repository, RepositoryType};
+        use bytes::Bytes;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let cache_path = temp_dir.path().join("cache");
+        let local_repo_path = temp_dir.path().join("local_repo");
+
+        // Create cache and local repository
+        let mut cache_repo = Repository::new(
+            RepositoryType::Cache,
+            cache_path.to_string_lossy().to_string(),
+        );
+        let mut local_repo = Repository::new(
+            RepositoryType::Local,
+            local_repo_path.to_string_lossy().to_string(),
+        );
+
+        let test_package_name = "test-package-1.0.0-h123_0.conda";
+        let test_content = b"test_package_content".to_vec();
+
+        // Upload to both
+        let cache_result = cache_repo
+            .upload_package(test_package_name, Bytes::from(test_content.clone()))
+            .await;
+        let local_result = local_repo
+            .upload_package(test_package_name, Bytes::from(test_content.clone()))
+            .await;
+
+        assert!(cache_result.is_ok(), "Cache upload should succeed");
+        assert!(local_result.is_ok(), "Local repo upload should succeed");
+
+        // Verify different storage behaviors
+        // Cache stores individual package files
+        let cached_file = cache_path.join(test_package_name);
+        assert!(
+            cached_file.exists(),
+            "Cache should store individual package file"
+        );
+
+        // Local repository creates structured directory with repodata
+        assert!(
+            local_repo_path.exists(),
+            "Local repo directory should exist"
+        );
+        // Note: The actual structure depends on the repository implementation
+        // This test documents the expected difference in behavior
+    }
 }

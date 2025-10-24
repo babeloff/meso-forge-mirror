@@ -24,3 +24,17 @@ target
 # Added by cargo
 
 /target
+
+# Test artifacts and conda packages
+*.conda
+local-conda-cache/
+conda-packages/
+rattler-packages/
+test_platform_fix*
+
+# Log files
+logs/
+*.log
+
+# Temporary files
+*.tmp

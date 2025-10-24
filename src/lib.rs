@@ -38,7 +38,7 @@ mod tests {
 
         // This would normally fail because we don't have real conda package data,
         // but we can test the filename parsing logic
-        let result = handler.extract_metadata_from_filename(filename);
+        let result = handler.extract_metadata_from_filename_fallback(filename);
         assert!(result.is_ok());
 
         let metadata = result.unwrap();
@@ -119,11 +119,13 @@ mod tests {
         let mock_metadata = SimpleIndexJson {
             name: "test-package".to_string(),
             version: "1.0.0".to_string(),
-            build: "py39_0".to_string(),
+            build: "py37_0".to_string(),
             build_number: 0,
-            depends: vec!["python >=3.9".to_string()],
+            depends: vec!["python >=3.7".to_string()],
             license: Some("MIT".to_string()),
-            platform: Some("linux-64".to_string()),
+            platform: Some("linux".to_string()),
+            subdir: Some("linux-64".to_string()),
+            arch: Some("x86_64".to_string()),
             timestamp: Some(chrono::Utc::now()),
         };
 

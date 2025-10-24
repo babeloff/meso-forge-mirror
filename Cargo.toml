@@ -38,6 +38,7 @@ md-5 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 zip = "6.0"
 tar = "0.4"
+bzip2 = "0.4"
 flate2 = "1.0"
 regex = "1.11"
 tempfile = "3.14"

@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use comfy_table::modifiers::UTF8_ROUND_CORNERS;
-use comfy_table::presets::UTF8_FULL;
+use comfy_table::presets::NOTHING;
 use comfy_table::{Attribute, Cell, ContentArrangement, Table};
 
 use reqwest::Client;
@@ -122,14 +121,52 @@ impl AzureDevOpsClient {
         let response = request.send().await?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow!(
                 "Failed to list Azure DevOps artifacts: {} - {}",
-                response.status(),
-                response.text().await.unwrap_or_default()
+                status,
+                error_text
             ));
         }
 
-        let artifacts_response: AzureDevOpsArtifactsResponse = response.json().await?;
+        // Get the response text first to provide better error messages
+        let response_text = response.text().await?;
+
+        // Try to parse as JSON, providing the raw text if it fails
+        let artifacts_response: AzureDevOpsArtifactsResponse = match serde_json::from_str(
+            &response_text,
+        ) {
+            Ok(response) => response,
+            Err(e) => {
+                // Log more lines of the response for better debugging
+                let preview = response_text
+                    .lines()
+                    .take(30)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // Provide specific guidance based on response content
+                let guidance = if response_text.contains("<html")
+                    || response_text.contains("<!DOCTYPE html")
+                {
+                    if response_text.contains("_signin") || response_text.contains("login") {
+                        "\n\nThis appears to be an authentication redirect. Azure DevOps requires a Personal Access Token (PAT).\nSolution: Create a config file with your PAT:\n  {\n    \"azure_devops_token\": \"your_pat_here\"\n  }\nGet PAT from: https://dev.azure.com/ → Security → Personal Access Tokens"
+                    } else {
+                        "\n\nReceived HTML instead of JSON. This usually indicates an authentication or API endpoint issue."
+                    }
+                } else {
+                    "\n\nExpected JSON response from Azure DevOps API."
+                };
+
+                return Err(anyhow!(
+                    "Failed to parse Azure DevOps artifacts response as JSON: {}\nResponse preview:\n{}\n{}",
+                    e,
+                    preview,
+                    guidance
+                ));
+            }
+        };
 
         info!(
             "Found {} artifacts for build {} in {}/{}",
@@ -164,14 +201,51 @@ impl AzureDevOpsClient {
         let response = request.send().await?;
 
         if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
             return Err(anyhow!(
                 "Failed to list Azure DevOps builds: {} - {}",
-                response.status(),
-                response.text().await.unwrap_or_default()
+                status,
+                error_text
             ));
         }
 
-        let builds_response: AzureDevOpsBuildsResponse = response.json().await?;
+        // Get the response text first to provide better error messages
+        let response_text = response.text().await?;
+
+        // Try to parse as JSON, providing the raw text if it fails
+        let builds_response: AzureDevOpsBuildsResponse = match serde_json::from_str(&response_text)
+        {
+            Ok(response) => response,
+            Err(e) => {
+                // Log more lines of the response for better debugging
+                let preview = response_text
+                    .lines()
+                    .take(30)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                // Provide specific guidance based on response content
+                let guidance = if response_text.contains("<html")
+                    || response_text.contains("<!DOCTYPE html")
+                {
+                    if response_text.contains("_signin") || response_text.contains("login") {
+                        "\n\nThis appears to be an authentication redirect. Azure DevOps requires a Personal Access Token (PAT).\nSolution: Create a config file with your PAT:\n  {\n    \"azure_devops_token\": \"your_pat_here\"\n  }\nGet PAT from: https://dev.azure.com/ → Security → Personal Access Tokens"
+                    } else {
+                        "\n\nReceived HTML instead of JSON. This usually indicates an authentication or API endpoint issue."
+                    }
+                } else {
+                    "\n\nExpected JSON response from Azure DevOps API."
+                };
+
+                return Err(anyhow!(
+                    "Failed to parse Azure DevOps builds response as JSON: {}\nResponse preview:\n{}\n{}",
+                    e,
+                    preview,
+                    guidance
+                ));
+            }
+        };
 
         info!(
             "Found {} builds in {}/{}",
@@ -363,8 +437,7 @@ impl AzureDevOpsClient {
 
         let mut table = Table::new();
         table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS)
+            .load_preset(NOTHING)
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_header(vec![
                 Cell::new("ID").add_attribute(Attribute::Bold),
@@ -467,8 +540,7 @@ impl AzureDevOpsClient {
 
         let mut table = Table::new();
         table
-            .load_preset(UTF8_FULL)
-            .apply_modifier(UTF8_ROUND_CORNERS)
+            .load_preset(NOTHING)
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_header(vec![
                 Cell::new("Build ID").add_attribute(Attribute::Bold),
@@ -1215,8 +1287,8 @@ mod tests {
         assert!(builds_json.contains("queue_time"));
 
         let artifacts_json = serde_json::to_string_pretty(&artifacts).unwrap();
-        assert!(artifacts_json.contains("artifact_type"));
-        assert!(artifacts_json.contains("download_url"));
+        assert!(artifacts_json.contains("\"type\""));
+        assert!(artifacts_json.contains("downloadUrl"));
         assert!(artifacts_json.contains("properties"));
     }
 }

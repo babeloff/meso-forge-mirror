@@ -321,6 +321,10 @@ description = "Mirror conda packages to local cache using meso-forge-mirror tool
 cmd = "bash -c 'mkdir -p ./local-conda-cache && if command -v conda-index >/dev/null 2>&1; then conda-index ./local-conda-cache && echo \"Local conda channel ready at: file://$(pwd)/local-conda-cache\"; else echo \"Warning: conda-index not found. Install conda-build to create package index.\"; fi'"
 description = "Set up local conda channel with package index"
 
+[tasks.fix-package-placement]
+cmd = "bash scripts/linux-activation.sh --quiet"
+description = "Fix conda packages that are in wrong platform directories (e.g., Linux packages in noarch)"
+
 [tasks.process-azure-artifact]
 cmd = "bash scripts/process-downloaded-artifacts.sh"
 description = "Process downloaded Azure DevOps artifact ZIP file containing conda packages"
@@ -363,7 +367,7 @@ features = ["default"]
 solve-group = "packaging"
 
 [target.linux-64.activation]
-scripts = ["scripts/setup-env.sh"]
+scripts = ["scripts/setup-env.sh", "scripts/linux-activation.sh"]
 
 [target.osx-64.activation]
 scripts = ["scripts/setup-env.sh"]
